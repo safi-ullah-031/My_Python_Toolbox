@@ -1,11 +1,13 @@
+import os
+import sys
+import psutil
 import tkinter as tk
 from tkinter import ttk, messagebox
-import psutil
 
-# Function to fetch and display running processes
-def update_process_list(search_text=""):
-    process_list.delete(*process_list.get_children())  # Clear existing items
-    
+# Function to get the list of running processes
+def get_processes(search_text=""):
+    process_list.delete(*process_list.get_children())  # Clear the list
+
     for proc in psutil.process_iter(attrs=['pid', 'name']):
         try:
             pid = proc.info['pid']
@@ -23,19 +25,19 @@ def kill_selected_process():
     if not selected_item:
         messagebox.showwarning("No Selection", "Please select a process to terminate.")
         return
-    
+
     # Get PID from selected row
     process_info = process_list.item(selected_item, "values")
     if not process_info:
         return
 
     pid = int(process_info[0])
-    
+
     try:
         process = psutil.Process(pid)
         process.terminate()  # Kill process
         messagebox.showinfo("Success", f"Process {pid} ({process_info[1]}) terminated successfully.")
-        update_process_list()
+        get_processes()  # Refresh process list
     except psutil.NoSuchProcess:
         messagebox.showerror("Error", "Process no longer exists.")
     except psutil.AccessDenied:
@@ -43,24 +45,38 @@ def kill_selected_process():
     except Exception as e:
         messagebox.showerror("Error", f"Unexpected error: {e}")
 
-# Function to refresh the process list
+# Function to open Task Manager (OS-specific)
+def open_task_manager():
+    try:
+        if sys.platform.startswith("win"):
+            os.system("taskmgr")  # Windows Task Manager
+        elif sys.platform.startswith("darwin"):
+            os.system("open -a 'Activity Monitor'")  # macOS Activity Monitor
+        elif sys.platform.startswith("linux"):
+            os.system("gnome-system-monitor &")  # Linux System Monitor (GNOME)
+        else:
+            messagebox.showerror("Error", "Task Manager not supported on this OS.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Could not open Task Manager: {e}")
+
+# Function to refresh process list with search
 def refresh_processes():
     search_text = search_var.get().strip()
-    update_process_list(search_text)
+    get_processes(search_text)
 
 # Creating the GUI window
 root = tk.Tk()
-root.title("Task Manager - Process Killer")
-root.geometry("600x500")
-root.configure(bg="#1e1e1e")
+root.title("Cross-Platform Task Manager")
+root.geometry("650x500")
+root.configure(bg="#2e2e2e")
 
 # Search bar
 search_var = tk.StringVar()
-search_entry = ttk.Entry(root, textvariable=search_var, width=40)
+search_entry = ttk.Entry(root, textvariable=search_var, width=50)
 search_entry.pack(pady=10)
 search_entry.insert(0, "Search process...")
 
-# Process list
+# Process list (TreeView Table)
 columns = ("PID", "Process Name")
 process_list = ttk.Treeview(root, columns=columns, show="headings", height=15)
 
@@ -75,7 +91,7 @@ process_list.column("Process Name", width=400, anchor="w")
 process_list.pack(pady=10, padx=10, fill="both", expand=True)
 
 # Buttons
-button_frame = tk.Frame(root, bg="#1e1e1e")
+button_frame = tk.Frame(root, bg="#2e2e2e")
 button_frame.pack(pady=10)
 
 kill_button = ttk.Button(button_frame, text="Kill Selected Process", command=kill_selected_process)
@@ -84,8 +100,11 @@ kill_button.grid(row=0, column=0, padx=10)
 refresh_button = ttk.Button(button_frame, text="Refresh List", command=refresh_processes)
 refresh_button.grid(row=0, column=1, padx=10)
 
+task_manager_button = ttk.Button(button_frame, text="Open Task Manager", command=open_task_manager)
+task_manager_button.grid(row=0, column=2, padx=10)
+
 # Load processes initially
-update_process_list()
+get_processes()
 
 # Run the GUI
 root.mainloop()
