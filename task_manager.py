@@ -7,7 +7,7 @@ from tkinter import ttk, messagebox
 # Function to get the list of running processes
 def get_processes(search_text=""):
     process_list.delete(*process_list.get_children())  # Clear the list
-
+    
     for proc in psutil.process_iter(attrs=['pid', 'name']):
         try:
             pid = proc.info['pid']
@@ -32,12 +32,22 @@ def kill_selected_process():
         return
 
     pid = int(process_info[0])
+    process_name = process_info[1]
+
+    # Confirmation popup before killing the process
+    confirm = messagebox.askyesno("Confirm", f"Are you sure you want to kill '{process_name}' (PID: {pid})?")
+    if not confirm:
+        return
 
     try:
         process = psutil.Process(pid)
         process.terminate()  # Kill process
-        messagebox.showinfo("Success", f"Process {pid} ({process_info[1]}) terminated successfully.")
-        get_processes()  # Refresh process list
+        
+        # Show success message
+        messagebox.showinfo("Success", f"Process '{process_name}' (PID: {pid}) terminated successfully.")
+        
+        # Refresh the process list after killing
+        refresh_processes()
     except psutil.NoSuchProcess:
         messagebox.showerror("Error", "Process no longer exists.")
     except psutil.AccessDenied:
