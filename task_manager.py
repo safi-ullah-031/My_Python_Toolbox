@@ -1,85 +1,91 @@
-#This script will only work on Windows.
-
-import os
+import tkinter as tk
+from tkinter import ttk, messagebox
 import psutil
 
-def list_running_processes():
-    """Lists all running processes with their PID and name."""
-    processes = []
-    print("\nRunning Processes:")
-    print(f"{'PID':<10}{'Process Name'}")
-    print("-" * 30)
+# Function to fetch and display running processes
+def update_process_list(search_text=""):
+    process_list.delete(*process_list.get_children())  # Clear existing items
     
     for proc in psutil.process_iter(attrs=['pid', 'name']):
         try:
             pid = proc.info['pid']
             name = proc.info['name']
-            print(f"{pid:<10}{name}")
-            processes.append((pid, name))
+            
+            # Filter processes based on search input
+            if search_text.lower() in name.lower():
+                process_list.insert("", "end", values=(pid, name))
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
-    
-    return processes
 
-def kill_process_by_pid(pid):
-    """Terminates a process by its PID."""
+# Function to kill a selected process
+def kill_selected_process():
+    selected_item = process_list.selection()
+    if not selected_item:
+        messagebox.showwarning("No Selection", "Please select a process to terminate.")
+        return
+    
+    # Get PID from selected row
+    process_info = process_list.item(selected_item, "values")
+    if not process_info:
+        return
+
+    pid = int(process_info[0])
+    
     try:
         process = psutil.Process(pid)
-        process.terminate()  # Terminate the process
-        print(f"Process {pid} ({process.name()}) terminated successfully.")
+        process.terminate()  # Kill process
+        messagebox.showinfo("Success", f"Process {pid} ({process_info[1]}) terminated successfully.")
+        update_process_list()
     except psutil.NoSuchProcess:
-        print("Error: No such process found.")
+        messagebox.showerror("Error", "Process no longer exists.")
     except psutil.AccessDenied:
-        print("Error: Permission denied. Try running as administrator.")
+        messagebox.showerror("Error", "Permission denied! Try running as administrator.")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        messagebox.showerror("Error", f"Unexpected error: {e}")
 
-def kill_process_by_name(name):
-    """Terminates a process by its name."""
-    found = False
-    for proc in psutil.process_iter(attrs=['pid', 'name']):
-        if proc.info['name'].lower() == name.lower():
-            try:
-                proc.terminate()
-                print(f"Process {proc.info['pid']} ({proc.info['name']}) terminated successfully.")
-                found = True
-            except psutil.NoSuchProcess:
-                print(f"Error: {proc.info['name']} process not found.")
-            except psutil.AccessDenied:
-                print(f"Error: Permission denied for {proc.info['name']}.")
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-    
-    if not found:
-        print("Error: No process found with that name.")
+# Function to refresh the process list
+def refresh_processes():
+    search_text = search_var.get().strip()
+    update_process_list(search_text)
 
-if __name__ == "__main__":
-    while True:
-        print("\nTask Manager Options:")
-        print("1. View running processes")
-        print("2. Kill a process by PID")
-        print("3. Kill a process by name")
-        print("4. Open Task Manager")
-        print("5. Exit")
+# Creating the GUI window
+root = tk.Tk()
+root.title("Task Manager - Process Killer")
+root.geometry("600x500")
+root.configure(bg="#1e1e1e")
 
-        choice = input("\nEnter your choice: ").strip()
+# Search bar
+search_var = tk.StringVar()
+search_entry = ttk.Entry(root, textvariable=search_var, width=40)
+search_entry.pack(pady=10)
+search_entry.insert(0, "Search process...")
 
-        if choice == "1":
-            list_running_processes()
-        elif choice == "2":
-            try:
-                pid = int(input("Enter the PID of the process to kill: ").strip())
-                kill_process_by_pid(pid)
-            except ValueError:
-                print("Error: Invalid PID. Please enter a number.")
-        elif choice == "3":
-            name = input("Enter the process name to kill (e.g., notepad.exe): ").strip()
-            kill_process_by_name(name)
-        elif choice == "4":
-            # Open Task Manager (Windows only)
-            os.system("taskmgr")
-        elif choice == "5":
-            print("Exiting Task Manager...")
-            break
-        else:
-            print("Invalid choice. Please enter a valid option.")
+# Process list
+columns = ("PID", "Process Name")
+process_list = ttk.Treeview(root, columns=columns, show="headings", height=15)
+
+# Column headings
+process_list.heading("PID", text="PID", anchor="center")
+process_list.heading("Process Name", text="Process Name", anchor="w")
+
+# Column width
+process_list.column("PID", width=80, anchor="center")
+process_list.column("Process Name", width=400, anchor="w")
+
+process_list.pack(pady=10, padx=10, fill="both", expand=True)
+
+# Buttons
+button_frame = tk.Frame(root, bg="#1e1e1e")
+button_frame.pack(pady=10)
+
+kill_button = ttk.Button(button_frame, text="Kill Selected Process", command=kill_selected_process)
+kill_button.grid(row=0, column=0, padx=10)
+
+refresh_button = ttk.Button(button_frame, text="Refresh List", command=refresh_processes)
+refresh_button.grid(row=0, column=1, padx=10)
+
+# Load processes initially
+update_process_list()
+
+# Run the GUI
+root.mainloop()
