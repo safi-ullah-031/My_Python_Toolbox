@@ -10,9 +10,12 @@ Miscellaneous Python tools for productivity
 Everyone is welcome to contribute! If you have a new feature or improvement, feel free to:
 
 # Fork the repository
-Create a new branch
-Add your changes
-Submit a pull request
+-> Create a new 
+
+-> Add your changes
+
+-> Submit a pull request
+
 
 # License
 This project is open-source and available for anyone to use and improve.
