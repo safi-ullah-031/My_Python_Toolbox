@@ -1,0 +1,9 @@
+gradio
+Pillow
+python-pptx
+reportlab
+tqdm
+pdf2docx
+tkinterdnd2
+psutil
+PIL
