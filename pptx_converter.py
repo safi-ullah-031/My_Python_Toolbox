@@ -1,83 +1,89 @@
 import os
-import shutil
-import fitz  # PyMuPDF for PDF conversion
 import gradio as gr
 from pptx import Presentation
-from pptx2pdf import convert
 from PIL import Image
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from tqdm import tqdm
 
-# Function to convert PPTX to images
-def pptx_to_images(pptx_path):
+# Output Directory
+OUTPUT_DIR = "converted_files"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def convert_pptx(file_path, output_format):
+    if not file_path:
+        return "No file uploaded", None
+
     try:
-        if not pptx_path.lower().endswith(".pptx"):
-            return "Error: Please upload a valid PPTX file."
+        # Load PowerPoint file
+        prs = Presentation(file_path)
+        filenames = []
+        
+        # Progress bar setup
+        progress_bar = tqdm(total=len(prs.slides), desc="Converting slides")
 
-        output_dir = pptx_path.replace(".pptx", "_images")
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if output_format == "Images":
+            output_folder = os.path.join(OUTPUT_DIR, "images")
+            os.makedirs(output_folder, exist_ok=True)
+            
+            for i, slide in enumerate(prs.slides):
+                img_path = os.path.join(output_folder, f"slide_{i+1}.png")
+                slide_image = convert_slide_to_image(slide)
+                slide_image.save(img_path, "PNG")
+                filenames.append(img_path)
+                
+                # Update progress bar
+                progress_bar.update(1)
 
-        presentation = Presentation(pptx_path)
-        image_paths = []
+            progress_bar.close()
+            return f"Conversion completed. {len(filenames)} images generated.", filenames
 
-        for i, slide in enumerate(presentation.slides):
-            img_path = os.path.join(output_dir, f"slide_{i+1}.png")
-            slide.shapes._spTree.write(img_path)  # Extract slide as an image
-            image_paths.append(img_path)
-
-        return image_paths if image_paths else "Error: No slides found in the PPTX."
+        elif output_format == "PDF":
+            pdf_path = os.path.join(OUTPUT_DIR, "converted.pdf")
+            create_pdf_from_pptx(prs, pdf_path)
+            
+            progress_bar.close()
+            return f"Conversion completed. PDF saved at {pdf_path}", [pdf_path]
 
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: {str(e)}", None
 
-# Function to convert PPTX to PDF
-def pptx_to_pdf(pptx_path):
-    try:
-        if not pptx_path.lower().endswith(".pptx"):
-            return "Error: Please upload a valid PPTX file."
 
-        output_pdf = pptx_path.replace(".pptx", ".pdf")
-        convert(pptx_path, output_pdf)  # Convert using pptx2pdf
+def convert_slide_to_image(slide):
+    """ Converts a PowerPoint slide to an image (dummy function). """
+    width, height = 1280, 720  # Define resolution
+    img = Image.new("RGB", (width, height), (255, 255, 255))
+    
+    draw = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+    img.paste(draw, (0, 0), draw)
+    return img
 
-        return output_pdf if os.path.exists(output_pdf) else "Error: PDF conversion failed."
 
-    except Exception as e:
-        return f"Error: {e}"
+def create_pdf_from_pptx(prs, pdf_path):
+    """ Creates a PDF from PowerPoint slides. """
+    c = canvas.Canvas(pdf_path)
+    
+    for i, slide in enumerate(prs.slides):
+        c.drawString(100, 750, f"Slide {i+1}")  # Placeholder for content
+        c.showPage()
+    
+    c.save()
 
-# Function to handle file upload and conversion
-def convert_pptx(pptx_file, output_type):
-    try:
-        if pptx_file is None:
-            return "Error: No file uploaded."
 
-        # Save uploaded file
-        file_path = os.path.join("uploads", pptx_file.name)
-        with open(file_path, "wb") as f:
-            f.write(pptx_file.read())
+# Gradio Interface
+with gr.Blocks() as demo:
+    gr.Markdown("## 📂 PPTX Converter (Images/PDF)")
 
-        # Process based on user choice
-        if output_type == "Images":
-            result = pptx_to_images(file_path)
-        elif output_type == "PDF":
-            result = pptx_to_pdf(file_path)
-        else:
-            result = "Error: Invalid output type selected."
+    with gr.Row():
+        file_input = gr.File(label="Upload PPTX File", type="filepath")
+        output_format = gr.Radio(["Images", "PDF"], label="Select Output Format")
+    
+    with gr.Row():
+        convert_button = gr.Button("Convert")
+    
+    progress_label = gr.Label(value="Awaiting conversion...")
+    gallery_output = gr.Gallery(label="Converted Files", columns=3, height=300)
+    
+    convert_button.click(convert_pptx, inputs=[file_input, output_format], outputs=[progress_label, gallery_output])
 
-        return result
-
-    except Exception as e:
-        return f"Error: {e}"
-
-# Gradio UI
-with gr.Blocks() as app:
-    gr.Markdown("# 📂 PPTX to Image & PDF Converter")
-    gr.Markdown("### Upload a PowerPoint file and choose the desired output format")
-
-    pptx_file = gr.File(label="Upload PPTX File")
-    output_type = gr.Radio(["Images", "PDF"], label="Select Output Format")
-    convert_btn = gr.Button("Convert")
-    output_display = gr.Gallery(label="Converted Files", type="filepath")
-
-    convert_btn.click(convert_pptx, inputs=[pptx_file, output_type], outputs=output_display)
-
-# Run the Gradio App
-app.launch()
+demo.launch()
