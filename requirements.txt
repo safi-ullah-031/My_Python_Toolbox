@@ -7,3 +7,5 @@ pdf2docx
 tkinterdnd2
 psutil
 PIL
+pyautogui 
+keyboard
