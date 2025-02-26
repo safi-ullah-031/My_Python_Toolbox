@@ -1,22 +1,38 @@
-import pywhatkit as kit
-import datetime
+import pyautogui
+import time
+import keyboard
 
-# Function to send a WhatsApp message
-def send_whatsapp_message(phone_number, message, hours, minutes):
+def send_whatsapp_message(contact_name, message):
     try:
-        kit.sendwhatmsg(phone_number, message, hours, minutes)
-        print(f"Message scheduled successfully to {phone_number} at {hours}:{minutes}")
+        # Open WhatsApp Desktop (Make sure it's already running)
+        pyautogui.hotkey('win', 's')  # Open Windows search
+        time.sleep(1)
+        pyautogui.write('WhatsApp')  # Type "WhatsApp"
+        time.sleep(1)
+        pyautogui.press('enter')  # Open WhatsApp
+        time.sleep(5)  # Wait for WhatsApp to open
+
+        # Search for the contact
+        pyautogui.hotkey('ctrl', 'f')  # Open search in WhatsApp
+        time.sleep(1)
+        pyautogui.write(contact_name)  # Type the contact's name
+        time.sleep(2)
+        pyautogui.press('enter')  # Open chat with contact
+        time.sleep(1)
+
+        # Type and send the message
+        pyautogui.write(message)  # Type the message
+        time.sleep(1)
+        pyautogui.press('enter')  # Send the message
+
+        print(f"Message sent to {contact_name} successfully!")
+    
     except Exception as e:
         print(f"Error: {e}")
 
-# User input for phone number and message
-phone_number = input("Enter phone number (with country code, e.g., +92XXXXXXXXXX): ")
-message = input("Enter the message: ")
+# Get user input
+contact_name = input("Enter the contact name: ")
+message = input("Enter your message: ")
 
-# Get current time and schedule message 1 minute later
-now = datetime.datetime.now()
-send_time_hours = now.hour
-send_time_minutes = now.minute + 1  # Sending after 1 minute
-
-# Send WhatsApp message
-send_whatsapp_message(phone_number, message, send_time_hours, send_time_minutes)
+# Send message
+send_whatsapp_message(contact_name, message)
