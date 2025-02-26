@@ -18,17 +18,22 @@ def send_whatsapp_message(contact_name, message):
         pyautogui.write(contact_name)  # Type the contact's name
         time.sleep(2)
         pyautogui.press('enter')  # Open chat with contact
+        time.sleep(2)
+
+        # Ensure the message box is active
+        pyautogui.click(x=500, y=900)  # Adjust coordinates to message box position
         time.sleep(1)
 
         # Type and send the message
         pyautogui.write(message)  # Type the message
         time.sleep(1)
         pyautogui.press('enter')  # Send the message
+        time.sleep(1)
 
-        print(f"Message sent to {contact_name} successfully!")
-    
+        print(f"✅ Message sent to {contact_name} successfully!")
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Error: {e}")
 
 # Get user input
 contact_name = input("Enter the contact name: ")
