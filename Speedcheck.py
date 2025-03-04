@@ -3,7 +3,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 # Initialize Theme
-ctk.set_appearance_mode("System")  # Supports "Light", "Dark", "System"
+ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
 def update_result_text(message, color="gray"):
@@ -25,14 +25,16 @@ def run_speed_test():
         st = speedtest.Speedtest()
         st.get_best_server()
 
-        # Run Tests
-        update_result_text("🚀 Testing Download Speed...", "blue")
+        # Measure Download Speed
+        update_result_text("🚀 Measuring Download Speed...", "blue")
         download_speed = st.download() / 1_000_000  # Convert to Mbps
         
-        update_result_text("📤 Testing Upload Speed...", "blue")
+        # Measure Upload Speed
+        update_result_text("📤 Measuring Upload Speed...", "blue")
         upload_speed = st.upload() / 1_000_000  # Convert to Mbps
         
-        ping_latency = st.results.ping  # Ping in ms
+        # Measure Ping
+        ping_latency = st.results.ping  
 
         # Display Results
         result_textbox.configure(state="normal")
@@ -54,30 +56,71 @@ def run_speed_test():
     except Exception as e:
         messagebox.showerror("Error", f"❌ Speed Test Failed!\n{e}")
 
+def run_bandwidth_test():
+    """ Runs a bandwidth test with a large file transfer to simulate real-world usage. """
+    try:
+        update_result_text("🔄 Running Bandwidth Test...", "purple")
+
+        st = speedtest.Speedtest()
+        st.get_best_server()
+
+        update_result_text("📥 Simulating Large File Download...", "blue")
+        download_bandwidth = st.download() / 1_000_000  # Convert to Mbps
+        
+        update_result_text("📤 Simulating Large File Upload...", "blue")
+        upload_bandwidth = st.upload() / 1_000_000  # Convert to Mbps
+
+        # Display Bandwidth Results
+        result_textbox.configure(state="normal")
+        result_textbox.delete("1.0", "end")
+
+        bandwidth_results = {
+            "📥 Simulated Download Bandwidth:": (download_bandwidth, "green"),
+            "📤 Simulated Upload Bandwidth:": (upload_bandwidth, "blue")
+        }
+
+        for label, (value, color) in bandwidth_results.items():
+            value_text = f"{label} {value:.2f} Mbps"
+            insert_result_text(value_text, color)
+
+        result_textbox.configure(state="disabled")
+        update_result_text("✅ Bandwidth Test Completed!", "green")
+
+    except Exception as e:
+        messagebox.showerror("Error", f"❌ Bandwidth Test Failed!\n{e}")
+
 def create_ui():
     """ Creates the GUI layout and components. """
     global root, result_label, result_textbox
 
     # Main Window
     root = ctk.CTk()
-    root.title("🚀 Network Speed Tester")
-    root.geometry("420x400")
+    root.title("🚀 Network Speed & Bandwidth Tester")
+    root.geometry("460x450")
     root.resizable(False, False)
 
-    # UI Elements
+    # Title Label
     ctk.CTkLabel(root, text="📡 Network Speed Tester", font=("Arial", 18, "bold")).pack(pady=10)
     
-    ctk.CTkButton(root, text="🚀 Start Speed Test", font=("Arial", 14), command=run_speed_test).pack(pady=10)
+    # Speed Test Button
+    ctk.CTkButton(root, text="🚀 Start Speed Test", font=("Arial", 14), command=run_speed_test).pack(pady=5)
 
-    result_label = ctk.CTkLabel(root, text="Click the button to test speed.", font=("Arial", 12), text_color="gray")
+    # Bandwidth Test Button
+    ctk.CTkButton(root, text="📊 Run Bandwidth Test", font=("Arial", 14), command=run_bandwidth_test).pack(pady=5)
+
+    # Result Label
+    result_label = ctk.CTkLabel(root, text="Click a button to test speed.", font=("Arial", 12), text_color="gray")
     result_label.pack(pady=10)
 
-    result_frame = ctk.CTkFrame(root, width=380, height=120, corner_radius=10)
+    # Frame for Results
+    result_frame = ctk.CTkFrame(root, width=420, height=150, corner_radius=10)
     result_frame.pack(pady=10)
 
-    result_textbox = ctk.CTkTextbox(result_frame, width=360, height=100, font=("Arial", 12), state="disabled", wrap="word")
+    # Text Box for Results
+    result_textbox = ctk.CTkTextbox(result_frame, width=400, height=130, font=("Arial", 12), state="disabled", wrap="word")
     result_textbox.pack(pady=10, padx=10)
 
+    # Mode Switch (Dark/Light)
     mode_switch = ctk.CTkOptionMenu(root, values=["Light", "Dark"], command=ctk.set_appearance_mode)
     mode_switch.set("System")
     mode_switch.pack(pady=10)
