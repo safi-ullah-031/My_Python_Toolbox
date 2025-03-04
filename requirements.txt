@@ -10,3 +10,4 @@ PIL
 pyautogui 
 keyboard
 speedtest-cli
+customtkinter
