@@ -9,3 +9,4 @@ psutil
 PIL
 pyautogui 
 keyboard
+speedtest-cli
