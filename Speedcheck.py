@@ -9,25 +9,36 @@ ctk.set_default_color_theme("blue")
 # Function to check network speed
 def check_speed():
     try:
-        result_label.configure(text="🔄 Testing network speed... Please wait...", text_color="orange")
+        result_label.configure(text="🔄 Finding best server...", text_color="orange")
         root.update_idletasks()
 
         # Speed test initialization
         st = speedtest.Speedtest()
         st.get_best_server()
-
-        # Measure speeds
+        
+        result_label.configure(text="⏳ Testing Download Speed...", text_color="blue")
+        root.update_idletasks()
         download_speed = st.download() / 1_000_000  # Convert to Mbps
+
+        result_label.configure(text="⏳ Testing Upload Speed...", text_color="blue")
+        root.update_idletasks()
         upload_speed = st.upload() / 1_000_000  # Convert to Mbps
+
         ping_latency = st.results.ping
 
         # Display results in the result box
         result_textbox.configure(state="normal")  # Enable editing
         result_textbox.delete("1.0", "end")  # Clear previous results
-        result_textbox.insert("1.0", f"📶 Download Speed: {download_speed:.2f} Mbps\n")
-        result_textbox.insert("2.0", f"📤 Upload Speed: {upload_speed:.2f} Mbps\n")
-        result_textbox.insert("3.0", f"⏳ Ping Latency: {ping_latency:.2f} ms\n")
+        result_textbox.insert("1.0", f"📶 Download Speed: {download_speed:.2f} Mbps\n", "download")
+        result_textbox.insert("2.0", f"📤 Upload Speed: {upload_speed:.2f} Mbps\n", "upload")
+        result_textbox.insert("3.0", f"⏳ Ping Latency: {ping_latency:.2f} ms\n", "ping")
         result_textbox.configure(state="disabled")  # Disable editing
+
+        # Change colors dynamically
+        result_textbox.tag_config("download", foreground="green")
+        result_textbox.tag_config("upload", foreground="blue")
+        result_textbox.tag_config("ping", foreground="red")
+
         result_label.configure(text="✅ Speed Test Completed!", text_color="green")
 
     except Exception as e:
@@ -43,7 +54,7 @@ def toggle_mode():
 
 # GUI Window
 root = ctk.CTk()
-root.title("Network Speed Tester")
+root.title("🚀 Network Speed Tester")
 root.geometry("420x400")
 root.resizable(False, False)
 
