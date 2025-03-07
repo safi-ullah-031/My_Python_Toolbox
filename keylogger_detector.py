@@ -140,3 +140,15 @@ def create_ui():
 
 # Run the Application
 create_ui()
+
+
+
+def create_ui():
+    """Builds the GUI for the tool."""
+    global root, result_textbox
+
+    # Main Window
+    root = ctk.CTk()
+    root.title("🔍 Keylogger Detector")
+    root.geometry("500x500")
+    root.resizable(False, False)
