@@ -4,11 +4,11 @@ import os
 import winreg
 from tkinter import messagebox
 
-# Initialize UI Theme
+# 🎨 UI THEME CONFIGURATION
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# Configuration Variables
+# 🔍 KEYLOGGER DETECTION PARAMETERS
 KNOWN_KEYLOGGERS = ["keylogger.exe", "hooker.exe", "spy.exe", "logger.exe"]
 SUSPICIOUS_DIRS = [r"C:\Users\Public", r"C:\Windows\Temp"]
 SUSPICIOUS_REG_KEYS = [
@@ -16,26 +16,28 @@ SUSPICIOUS_REG_KEYS = [
     r"Software\Microsoft\Windows\CurrentVersion\RunOnce"
 ]
 
-# UI Update Helper
+# 🔄 UI UPDATE FUNCTION
 def update_result(message, color="black"):
+    """Displays scan results with appropriate color formatting."""
     result_textbox.configure(state="normal")
     result_textbox.insert("end", f"{message}\n")
     result_textbox.tag_config(color, foreground=color)
     result_textbox.configure(state="disabled")
     root.update_idletasks()
 
+# 🛑 PROCESS SCANNING
 def scan_processes():
-    """Scans running processes for keyloggers."""
+    """Scans for running processes linked to keyloggers."""
     status_label.configure(text="🔍 Scanning processes...", text_color="orange")
-    found = [(p.info['name'], p.info['exe']) for p in psutil.process_iter(['pid', 'name', 'exe'])
-             if any(k in (p.info['name'] or "").lower() for k in KNOWN_KEYLOGGERS)]
+    detected = [(p.info['name'], p.info['exe']) for p in psutil.process_iter(['name', 'exe'])
+                if any(k in (p.info['name'] or "").lower() for k in KNOWN_KEYLOGGERS)]
     
     result_textbox.configure(state="normal")
     result_textbox.delete("1.0", "end")
 
-    if found:
+    if detected:
         update_result("🚨 Potential Keyloggers Detected!", "red")
-        for name, path in found:
+        for name, path in detected:
             update_result(f"🛑 {name} - {path}", "red")
         messagebox.showwarning("Warning", "Potential keylogger detected!")
     else:
@@ -43,25 +45,27 @@ def scan_processes():
     
     status_label.configure(text="✅ Scan Complete", text_color="green")
 
+# ❌ TERMINATE DETECTED PROCESSES
 def terminate_keyloggers():
-    """Terminates detected keylogger processes."""
+    """Attempts to terminate suspected keylogger processes."""
     status_label.configure(text="🛑 Terminating keyloggers...", text_color="orange")
-    terminated = []
+    terminated = [p.info['name'] for p in psutil.process_iter(['pid', 'name'])
+                  if any(k in (p.info['name'] or "").lower() for k in KNOWN_KEYLOGGERS)]
+
     for p in psutil.process_iter(['pid', 'name']):
-        if any(k in (p.info['name'] or "").lower() for k in KNOWN_KEYLOGGERS):
+        if p.info['name'] in terminated:
             psutil.Process(p.info['pid']).terminate()
-            terminated.append(p.info['name'])
-    
-    msg = f"Terminated: {', '.join(terminated)}" if terminated else "No suspicious processes found."
-    messagebox.showinfo("Process Termination", msg)
+
+    messagebox.showinfo("Process Termination", f"Terminated: {', '.join(terminated)}" if terminated else "No suspicious processes found.")
     status_label.configure(text="✅ Keyloggers Terminated", text_color="green")
 
+# 📂 HIDDEN FILES SCAN
 def scan_hidden_files():
-    """Scans for suspicious hidden files in key directories."""
+    """Scans common directories for hidden files."""
     status_label.configure(text="📂 Scanning hidden files...", text_color="orange")
     detected = [os.path.join(dir, f) for dir in SUSPICIOUS_DIRS for f in os.listdir(dir)
                 if os.path.isfile(os.path.join(dir, f)) and f.startswith(".")]
-    
+
     update_result("\n🔍 Scanning Hidden Files...", "blue")
 
     if detected:
@@ -72,8 +76,9 @@ def scan_hidden_files():
 
     status_label.configure(text="✅ Hidden Files Scan Complete", text_color="green")
 
+# 🔎 REGISTRY SCAN
 def check_registry():
-    """Checks Windows registry for suspicious auto-start programs."""
+    """Checks Windows registry for suspicious startup entries."""
     status_label.configure(text="🔎 Checking Registry...", text_color="orange")
     found_entries = []
 
@@ -102,6 +107,7 @@ def check_registry():
 
     status_label.configure(text="✅ Registry Scan Complete", text_color="green")
 
+# 🗑️ DELETE HIDDEN FILES
 def delete_hidden_files():
     """Deletes detected hidden keylogger files."""
     status_label.configure(text="🗑️ Deleting hidden files...", text_color="orange")
@@ -111,15 +117,14 @@ def delete_hidden_files():
     for file in deleted:
         os.remove(file)
 
-    msg = f"Deleted: {', '.join(deleted)}" if deleted else "No suspicious files found."
-    messagebox.showinfo("File Deletion", msg)
+    messagebox.showinfo("File Deletion", f"Deleted: {', '.join(deleted)}" if deleted else "No suspicious files found.")
     status_label.configure(text="✅ Hidden Files Deleted", text_color="green")
 
+# 🎨 CREATE UI
 def create_ui():
     """Builds the GUI for the tool."""
     global root, result_textbox, status_label
 
-    # Main Window
     root = ctk.CTk()
     root.title("🔍 Keylogger Detector")
     root.geometry("550x550")
@@ -132,7 +137,7 @@ def create_ui():
     status_label = ctk.CTkLabel(root, text="Ready to Scan", font=("Arial", 14), text_color="gray")
     status_label.pack(pady=5)
 
-    # Buttons with Stylish Layout
+    # Buttons Layout
     button_frame = ctk.CTkFrame(root)
     button_frame.pack(pady=10)
 
@@ -158,5 +163,5 @@ def create_ui():
 
     root.mainloop()
 
-# Run the Application
+# 🚀 RUN APPLICATION
 create_ui()
