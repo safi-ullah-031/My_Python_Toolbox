@@ -1,6 +1,6 @@
 from scapy.all import sniff, IP, TCP, UDP, ICMP, ARP
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, StringVar
 import threading
 import datetime
 
@@ -11,87 +11,93 @@ ctk.set_default_color_theme("blue")
 # 📄 Log File Configuration
 LOG_FILE = "packet_sniffer_log.txt"
 
-# 🔍 Packet Sniffing Function
+# 🔍 Function to Process Captured Packets
 def packet_callback(packet):
-    """Processes captured packets and displays relevant details."""
-    try:
-        protocol = "Unknown"
-        src, dst, length = "N/A", "N/A", len(packet)
+    """Processes captured packets based on the selected filter and logs details."""
+    selected_protocol = protocol_var.get()
+    protocol = "Unknown"
+    src, dst, length = "N/A", "N/A", len(packet)
 
-        # Identify Protocol
-        if IP in packet:
-            src, dst = packet[IP].src, packet[IP].dst
-            if TCP in packet:
-                protocol = "TCP"
-            elif UDP in packet:
-                protocol = "UDP"
-            elif ICMP in packet:
-                protocol = "ICMP"
-        elif ARP in packet:
-            protocol = "ARP"
+    # Identify Protocol
+    if IP in packet:
+        src, dst = packet[IP].src, packet[IP].dst
+        if TCP in packet:
+            protocol = "TCP"
+        elif UDP in packet:
+            protocol = "UDP"
+        elif ICMP in packet:
+            protocol = "ICMP"
+    elif ARP in packet:
+        protocol = "ARP"
 
-        # Format Packet Data
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        packet_info = f"[{timestamp}] {protocol} | {src} → {dst} | {length} bytes\n"
+    # Apply Protocol Filter
+    if selected_protocol != "All" and protocol != selected_protocol:
+        return  # Skip packet if it doesn't match the selected filter
 
-        # Update GUI
-        log_textbox.configure(state="normal")
-        log_textbox.insert("end", packet_info)
-        log_textbox.see("end")
-        log_textbox.configure(state="disabled")
+    # Format Packet Data
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    packet_info = f"[{timestamp}] {protocol} | {src} → {dst} | {length} bytes\n"
 
-        # ✅ Save to Log File (Fix Encoding Issue)
-        with open(LOG_FILE, "a", encoding="utf-8") as log_file:
-            log_file.write(packet_info)
+    # Update UI
+    result_textbox.configure(state="normal")
+    result_textbox.insert("end", packet_info)
+    result_textbox.configure(state="disabled")
 
-    except Exception as e:
-        messagebox.showerror("Error", f"❌ Packet Processing Failed!\n{str(e)}")
+    # Save to Log File
+    with open(LOG_FILE, "a", encoding="utf-8") as log_file:
+        log_file.write(packet_info)
 
-# 🚀 Start Sniffing in Background
+# 🚀 Function to Start Packet Sniffing
 def start_sniffing():
-    global sniffing_thread
-    sniffing_thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False), daemon=True)
-    sniffing_thread.start()
-    start_button.configure(state="disabled", text="Sniffing...")
+    """Starts sniffing packets in a separate thread."""
+    try:
+        result_textbox.configure(state="normal")
+        result_textbox.delete("1.0", "end")  # Clear previous logs
+        result_textbox.configure(state="disabled")
 
-# 🛑 Stop Sniffing
+        sniff_thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False))
+        sniff_thread.daemon = True
+        sniff_thread.start()
+
+        status_label.configure(text="✅ Sniffing started!", text_color="green")
+    except Exception as e:
+        messagebox.showerror("Error", f"❌ Failed to start sniffing!\n{e}")
+
+# 🛑 Function to Stop Sniffing (Currently Not Needed)
 def stop_sniffing():
-    messagebox.showinfo("Info", "⚠️ Stop function is not available. Close the app to stop sniffing!")
+    """(Optional) Function to stop sniffing - Implement later if needed."""
+    messagebox.showinfo("Info", "Stopping sniffing is not yet implemented!")
 
-# 🎭 Toggle Dark/Light Mode
-def toggle_mode():
-    ctk.set_appearance_mode(mode_switch.get())
-
-# 📟 GUI Setup
+# 🎨 GUI Setup
 root = ctk.CTk()
-root.title("🕵️ Packet Sniffer")
-root.geometry("600x400")
+root.title("Packet Sniffer with Filtering")
+root.geometry("500x450")
 root.resizable(False, False)
 
-# 📌 Title Label
-title_label = ctk.CTkLabel(root, text="🔍 Network Packet Sniffer", font=("Arial", 18, "bold"))
+# 📌 Title
+title_label = ctk.CTkLabel(root, text="📡 Packet Sniffer", font=("Arial", 18, "bold"))
 title_label.pack(pady=10)
 
-# 🚀 Start Button
-start_button = ctk.CTkButton(root, text="▶ Start Sniffing", font=("Arial", 14), command=start_sniffing)
-start_button.pack(pady=5)
+# 🎯 Protocol Selection Dropdown
+protocol_var = StringVar(value="All")
+protocol_label = ctk.CTkLabel(root, text="Filter by Protocol:", font=("Arial", 12))
+protocol_label.pack()
+protocol_menu = ctk.CTkOptionMenu(root, variable=protocol_var, values=["All", "TCP", "UDP", "ICMP", "ARP"])
+protocol_menu.pack(pady=5)
 
-# 🛑 Stop Button
-stop_button = ctk.CTkButton(root, text="⏹ Stop Sniffing", font=("Arial", 14), fg_color="red", command=stop_sniffing)
-stop_button.pack(pady=5)
+# 🚀 Start Sniffing Button
+start_button = ctk.CTkButton(root, text="🚀 Start Sniffing", font=("Arial", 14), command=start_sniffing)
+start_button.pack(pady=10)
 
-# 📜 Log Frame
-log_frame = ctk.CTkFrame(root, width=580, height=250, corner_radius=10)
-log_frame.pack(pady=10)
+# 📡 Status Label
+status_label = ctk.CTkLabel(root, text="Click to start sniffing...", font=("Arial", 12), text_color="gray")
+status_label.pack(pady=5)
 
-# 📄 Log Text Box
-log_textbox = ctk.CTkTextbox(log_frame, width=560, height=230, font=("Arial", 12), state="disabled", wrap="word")
-log_textbox.pack(pady=10, padx=10)
+# 📜 Result Box
+result_frame = ctk.CTkFrame(root, width=460, height=200, corner_radius=10)
+result_frame.pack(pady=10)
+result_textbox = ctk.CTkTextbox(result_frame, width=440, height=180, font=("Arial", 12), state="disabled", wrap="word")
+result_textbox.pack(pady=10, padx=10)
 
-# 🌗 Mode Switch
-mode_switch = ctk.CTkOptionMenu(root, values=["Light", "Dark"], command=lambda _: toggle_mode())
-mode_switch.set("System")
-mode_switch.pack(pady=10)
-
-# 🎬 Run GUI
+# 🎛️ Run GUI
 root.mainloop()
