@@ -40,12 +40,12 @@ def packet_callback(packet):
         log_textbox.see("end")
         log_textbox.configure(state="disabled")
 
-        # Save to Log File
-        with open(LOG_FILE, "a") as log_file:
+        # ✅ Save to Log File (Fix Encoding Issue)
+        with open(LOG_FILE, "a", encoding="utf-8") as log_file:
             log_file.write(packet_info)
 
     except Exception as e:
-        messagebox.showerror("Error", f"❌ Packet Processing Failed!\n{e}")
+        messagebox.showerror("Error", f"❌ Packet Processing Failed!\n{str(e)}")
 
 # 🚀 Start Sniffing in Background
 def start_sniffing():
