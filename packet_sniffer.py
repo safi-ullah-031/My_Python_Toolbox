@@ -1,6 +1,6 @@
 from scapy.all import sniff, IP, TCP, UDP, ICMP, ARP, Raw
 import customtkinter as ctk
-from tkinter import messagebox, StringVar, filedialog
+from tkinter import messagebox, StringVar, filedialog, Scrollbar, Text, Menu
 import threading
 import datetime
 import requests
@@ -8,7 +8,7 @@ import csv
 import json
 
 # 🎨 UI Theme Configuration
-ctk.set_appearance_mode("Dark")  # Default theme
+ctk.set_appearance_mode("Dark")  # Default to Dark Mode
 ctk.set_default_color_theme("blue")
 
 # 🌍 Function to Get IP Geolocation
@@ -26,10 +26,15 @@ def get_geolocation(ip):
 # 🌐 Packet Counter
 packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "ARP": 0, "Other": 0}
 captured_packets = []  # Store packets for later saving
+is_sniffing = False  # Global flag to control sniffing
 
 # 🔍 Packet Processing Function
 def packet_callback(packet):
-    """Processes captured packets based on user-selected filter and logs details."""
+    global is_sniffing
+    if not is_sniffing:
+        return
+
+    """Processes captured packets and logs details."""
     selected_protocol = protocol_var.get()
     protocol = "Unknown"
     src, dst, length, src_port, dst_port, raw_data = "N/A", "N/A", len(packet), "N/A", "N/A", "N/A"
@@ -76,6 +81,8 @@ def packet_callback(packet):
     # Update UI
     result_textbox.configure(state="normal")
     result_textbox.insert("end", packet_info)
+    if auto_scroll_var.get():
+        result_textbox.see("end")  # Auto-scroll
     result_textbox.configure(state="disabled")
 
     # Store Packet for Later Saving
@@ -97,50 +104,25 @@ def update_stats():
 
 # 🚀 Function to Start Sniffing
 def start_sniffing():
+    global is_sniffing
+    is_sniffing = True
     """Starts packet sniffing in a separate thread."""
-    try:
-        result_textbox.configure(state="normal")
-        result_textbox.delete("1.0", "end")  # Clear previous logs
-        result_textbox.configure(state="disabled")
+    sniff_thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False))
+    sniff_thread.daemon = True
+    sniff_thread.start()
 
-        # Reset Packet Count
-        global packet_count, captured_packets
-        packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "ARP": 0, "Other": 0}
-        captured_packets = []
-        update_stats()
+    status_label.configure(text="✅ Sniffing started!", text_color="green")
 
-        sniff_thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False))
-        sniff_thread.daemon = True
-        sniff_thread.start()
-
-        status_label.configure(text="✅ Sniffing started!", text_color="green")
-    except Exception as e:
-        messagebox.showerror("Error", f"❌ Failed to start sniffing!\n{e}")
-
-# 📝 Function to Save Logs
-def save_logs():
-    """Allows the user to choose where to save logs as CSV or JSON."""
-    file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv"), ("JSON Files", "*.json")])
-    if not file_path:
-        return
-
-    if file_path.endswith(".csv"):
-        with open(file_path, "w", newline="") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(["Timestamp", "Protocol", "Source IP", "Source Port", "Source Location", "Destination IP", "Destination Port", "Destination Location", "Length", "Raw Data"])
-            for pkt in captured_packets:
-                writer.writerow([pkt["timestamp"], pkt["protocol"], pkt["source"]["ip"], pkt["source"]["port"], pkt["source"]["location"],
-                                 pkt["destination"]["ip"], pkt["destination"]["port"], pkt["destination"]["location"], pkt["length"], pkt["raw_data"]])
-    else:
-        with open(file_path, "w") as json_file:
-            json.dump(captured_packets, json_file, indent=4)
-
-    messagebox.showinfo("Success", f"✅ Logs saved successfully at:\n{file_path}")
+# 🛑 Function to Stop Sniffing
+def stop_sniffing():
+    global is_sniffing
+    is_sniffing = False
+    status_label.configure(text="🛑 Sniffing Stopped!", text_color="red")
 
 # 🎨 GUI Setup
 root = ctk.CTk()
-root.title("Advanced Packet Sniffer")
-root.geometry("600x550")
+root.title("🚀 Advanced Packet Sniffer")
+root.geometry("700x600")
 root.resizable(True, True)
 
 # 📌 Title
@@ -152,9 +134,15 @@ protocol_var = StringVar(value="All")
 protocol_menu = ctk.CTkOptionMenu(root, variable=protocol_var, values=["All", "TCP", "UDP", "ICMP", "ARP"])
 protocol_menu.pack(pady=5)
 
-# 🚀 Start Sniffing Button
-start_button = ctk.CTkButton(root, text="🚀 Start Sniffing", font=("Arial", 14), command=start_sniffing)
-start_button.pack(pady=5)
+# 🚀 Start & Stop Buttons
+button_frame = ctk.CTkFrame(root)
+button_frame.pack(pady=5)
+
+start_button = ctk.CTkButton(button_frame, text="🚀 Start Sniffing", font=("Arial", 14), command=start_sniffing)
+start_button.grid(row=0, column=0, padx=10)
+
+stop_button = ctk.CTkButton(button_frame, text="🛑 Stop Sniffing", font=("Arial", 14), fg_color="red", command=stop_sniffing)
+stop_button.grid(row=0, column=1, padx=10)
 
 # 📡 Status Label
 status_label = ctk.CTkLabel(root, text="Click to start sniffing...", font=("Arial", 12), text_color="gray")
@@ -164,12 +152,17 @@ status_label.pack(pady=5)
 stats_label = ctk.CTkLabel(root, text="📡 TCP: 0 | UDP: 0 | ICMP: 0 | ARP: 0", font=("Arial", 12))
 stats_label.pack(pady=5)
 
-# 📜 Log Display
-result_textbox = ctk.CTkTextbox(root, height=250, font=("Arial", 12), state="disabled", wrap="word")
+# 📜 Log Display with Scrollbar
+result_textbox = ctk.CTkTextbox(root, height=300, font=("Arial", 12), state="disabled", wrap="word")
 result_textbox.pack(pady=5, padx=10, fill="both", expand=True)
 
+# 🔁 Auto Scroll Toggle
+auto_scroll_var = ctk.BooleanVar(value=True)
+auto_scroll_check = ctk.CTkCheckBox(root, text="Auto Scroll Logs", variable=auto_scroll_var)
+auto_scroll_check.pack(pady=5)
+
 # 💾 Save Logs Button
-save_button = ctk.CTkButton(root, text="💾 Save Logs", font=("Arial", 14), command=save_logs)
+save_button = ctk.CTkButton(root, text="💾 Save Logs", font=("Arial", 14), command=lambda: messagebox.showinfo("Save", "Save feature coming soon!"))
 save_button.pack(pady=5)
 
 # 🎛️ Run GUI
