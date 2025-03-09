@@ -7,6 +7,7 @@ import json
 import datetime
 import threading
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import requests
 
@@ -14,7 +15,8 @@ import requests
 THRESHOLD_SYN = 100
 PORT_SCAN_THRESHOLD = 10
 suspicious_ips = {}
-ids_running = False  # Flag for starting/stopping IDS
+ids_running = False  # Flag for IDS control
+attack_counts = {}
 
 # 🌍 Get IP Geolocation
 def get_geo_location(ip):
@@ -27,13 +29,13 @@ def get_geo_location(ip):
 # 🕵️‍♂️ Packet Handler
 def packet_callback(packet):
     if not ids_running:
-        return  # Stop processing if IDS is stopped
+        return  
 
     if IP in packet:
         src_ip = packet[IP].src
         dst_ip = packet[IP].dst
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         if packet.haslayer(TCP) and packet[TCP].flags == 2:
             suspicious_ips[src_ip] = suspicious_ips.get(src_ip, 0) + 1
             if suspicious_ips[src_ip] > THRESHOLD_SYN:
@@ -55,15 +57,25 @@ def log_alert(alert_type, src_ip, dst_ip, timestamp):
     attack_counts[alert_type] = attack_counts.get(alert_type, 0) + 1
     update_graph()
 
-# 📈 Update Graph
-def update_graph():
+# 📊 Graph Animation Update
+def update_graph(frame=None):
+    ax.clear()
+    ax.set_facecolor("#222831")  # Dark mode graph background
+    fig.patch.set_facecolor("#121212")
+
     attack_types = list(attack_counts.keys())
     attack_values = list(attack_counts.values())
 
-    ax.clear()
-    ax.bar(attack_types, attack_values, color=['red', 'blue'])
-    ax.set_title("Intrusion Detection Stats")
-    ax.set_ylabel("Count")
+    if attack_types:
+        bars = ax.bar(attack_types, attack_values, color=['#FF5733', '#33FFBD'])
+        ax.set_title("Intrusion Detection Stats", fontsize=12, color="white")
+        ax.set_ylabel("Count", fontsize=10, color="white")
+        ax.set_xlabel("Attack Types", fontsize=10, color="white")
+        ax.tick_params(colors='white')
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2, height, str(height), ha='center', va='bottom', fontsize=9, color='white')
 
     canvas.draw()
 
@@ -71,9 +83,8 @@ def update_graph():
 def start_ids():
     global ids_running
     ids_running = True
-    log_display.insert(tk.END, "🔍 IDS Started...\n")
+    log_display.insert(tk.END, "✅ IDS Started...\n")
 
-    # Run IDS in a separate thread
     thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False), daemon=True)
     thread.start()
 
@@ -110,35 +121,39 @@ def export_logs():
     messagebox.showinfo("Export", "Logs saved successfully!")
 
 # 🎨 GUI Configuration
+ctk.set_appearance_mode("Dark")  
 root = ctk.CTk()
-root.title("Intrusion Detection System (IDS)")
-root.geometry("700x500")
+root.title("🛡️ Intrusion Detection System (IDS)")
+root.geometry("800x600")
+root.configure(bg="#121212")
 
 # 📌 Title Label
-title_label = ctk.CTkLabel(root, text="🛡️ Intrusion Detection System", font=("Arial", 18, "bold"))
+title_label = ctk.CTkLabel(root, text="🚀 Intrusion Detection System (IDS)", font=("Arial", 18, "bold"), text_color="white")
 title_label.pack(pady=10)
 
 # 📝 Log Display
-log_display = scrolledtext.ScrolledText(root, width=80, height=15, state="normal")
+log_display = scrolledtext.ScrolledText(root, width=90, height=12, state="normal", bg="#1E1E1E", fg="white", font=("Arial", 10))
 log_display.pack(pady=10)
 
 # 🎮 Buttons
-btn_frame = ctk.CTkFrame(root)
+btn_frame = ctk.CTkFrame(root, fg_color="#1E1E1E")
 btn_frame.pack(pady=10)
 
-start_btn = ctk.CTkButton(btn_frame, text="🚀 Start IDS", command=start_ids)
+start_btn = ctk.CTkButton(btn_frame, text="🚀 Start IDS", command=start_ids, fg_color="#00C853")
 start_btn.grid(row=0, column=0, padx=10)
 
-stop_btn = ctk.CTkButton(btn_frame, text="⛔ Stop IDS", command=stop_ids)
+stop_btn = ctk.CTkButton(btn_frame, text="⛔ Stop IDS", command=stop_ids, fg_color="#FF3D00")
 stop_btn.grid(row=0, column=1, padx=10)
 
-export_btn = ctk.CTkButton(btn_frame, text="📂 Export Logs", command=export_logs)
+export_btn = ctk.CTkButton(btn_frame, text="📂 Export Logs", command=export_logs, fg_color="#2979FF")
 export_btn.grid(row=0, column=2, padx=10)
 
 # 📊 Graph for Attack Statistics
-fig, ax = plt.subplots(figsize=(5, 3))
+fig, ax = plt.subplots(figsize=(6, 4))
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
+
+ani = animation.FuncAnimation(fig, update_graph, interval=2000)  
 
 # 🌍 Attack Tracking
 attack_counts = {}
