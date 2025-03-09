@@ -1,4 +1,4 @@
-from scapy.all import sniff, IP, TCP, UDP
+from scapy.all import sniff, IP, TCP, UDP, Raw
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog
@@ -6,17 +6,20 @@ import csv
 import json
 import datetime
 import threading
+import queue
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import requests
 
 # 🚀 IDS Settings
-THRESHOLD_SYN = 100
-PORT_SCAN_THRESHOLD = 10
-suspicious_ips = {}
-ids_running = False  # Flag for IDS control
-attack_counts = {}
+THRESHOLD_SYN = 80  # SYN Flood threshold
+PORT_SCAN_THRESHOLD = 15  # Port scan threshold
+PAYLOAD_KEYWORDS = [b"attack", b"hacked", b"malware", b"exploit", b"password"]  # Suspicious payload words
+
+attack_counts = {}  # Track detected attacks
+ids_running = False  # IDS active flag
+packet_queue = queue.Queue()  # Queue for packet processing
 
 # 🌍 Get IP Geolocation
 def get_geo_location(ip):
@@ -26,8 +29,8 @@ def get_geo_location(ip):
     except:
         return "Unknown"
 
-# 🕵️‍♂️ Packet Handler
-def packet_callback(packet):
+# 🕵️‍♂️ Deep Packet Inspection (DPI)
+def analyze_packet(packet):
     if not ids_running:
         return  
 
@@ -36,15 +39,23 @@ def packet_callback(packet):
         dst_ip = packet[IP].dst
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Detect SYN Flood (High SYN Requests)
         if packet.haslayer(TCP) and packet[TCP].flags == 2:
-            suspicious_ips[src_ip] = suspicious_ips.get(src_ip, 0) + 1
-            if suspicious_ips[src_ip] > THRESHOLD_SYN:
+            attack_counts[src_ip] = attack_counts.get(src_ip, 0) + 1
+            if attack_counts[src_ip] > THRESHOLD_SYN:
                 log_alert("SYN Flood Detected", src_ip, dst_ip, timestamp)
 
+        # Detect Port Scanning (Frequent Port Access)
         if packet.haslayer(TCP) or packet.haslayer(UDP):
-            suspicious_ips[src_ip] = suspicious_ips.get(src_ip, 0) + 1
-            if suspicious_ips[src_ip] > PORT_SCAN_THRESHOLD:
+            attack_counts[src_ip] = attack_counts.get(src_ip, 0) + 1
+            if attack_counts[src_ip] > PORT_SCAN_THRESHOLD:
                 log_alert("Port Scanning Detected", src_ip, dst_ip, timestamp)
+
+        # Deep Payload Inspection (Detect Suspicious Content)
+        if packet.haslayer(Raw):
+            payload = packet[Raw].load.lower()
+            if any(keyword in payload for keyword in PAYLOAD_KEYWORDS):
+                log_alert("Suspicious Payload Detected", src_ip, dst_ip, timestamp)
 
 # 📝 Log Alerts
 def log_alert(alert_type, src_ip, dst_ip, timestamp):
@@ -60,17 +71,17 @@ def log_alert(alert_type, src_ip, dst_ip, timestamp):
 # 📊 Graph Animation Update
 def update_graph(frame=None):
     if fig is None or ax is None:
-        return  # Ensure figure and axes exist before updating
+        return  
 
     ax.clear()
-    ax.set_facecolor("#222831")  # Dark mode graph background
+    ax.set_facecolor("#222831")
     fig.patch.set_facecolor("#121212")
 
     attack_types = list(attack_counts.keys())
     attack_values = list(attack_counts.values())
 
     if attack_types:
-        bars = ax.bar(attack_types, attack_values, color=['#FF5733', '#33FFBD'])
+        bars = ax.bar(attack_types, attack_values, color=['#FF5733', '#33FFBD', '#FFD700'])
         ax.set_title("Intrusion Detection Stats", fontsize=12, color="white")
         ax.set_ylabel("Count", fontsize=10, color="white")
         ax.set_xlabel("Attack Types", fontsize=10, color="white")
@@ -82,13 +93,21 @@ def update_graph(frame=None):
 
     canvas.draw()
 
+# 🎯 IDS Engine (Multi-threaded)
+def process_packets():
+    while True:
+        packet = packet_queue.get()
+        if packet:
+            analyze_packet(packet)
+        packet_queue.task_done()
+
 # 🎯 Start IDS
 def start_ids():
     global ids_running
     ids_running = True
     log_display.insert(tk.END, "✅ IDS Started...\n")
 
-    thread = threading.Thread(target=lambda: sniff(prn=packet_callback, store=False), daemon=True)
+    thread = threading.Thread(target=lambda: sniff(prn=lambda p: packet_queue.put(p), store=False), daemon=True)
     thread.start()
 
 # ⛔ Stop IDS
@@ -157,10 +176,13 @@ canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
 
 # 🛠️ **Fix Warning**: Set cache_frame_data=False
-ani = animation.FuncAnimation(fig, update_graph, interval=2000, cache_frame_data=False)  
+ani = animation.FuncAnimation(fig, update_graph, interval=2000, cache_frame_data=False)
 
 # 🌍 Attack Tracking
 attack_counts = {}
+
+# 🚀 Start Processing Thread
+threading.Thread(target=process_packets, daemon=True).start()
 
 # 🎯 Run GUI
 root.mainloop()
