@@ -59,6 +59,9 @@ def log_alert(alert_type, src_ip, dst_ip, timestamp):
 
 # 📊 Graph Animation Update
 def update_graph(frame=None):
+    if fig is None or ax is None:
+        return  # Ensure figure and axes exist before updating
+
     ax.clear()
     ax.set_facecolor("#222831")  # Dark mode graph background
     fig.patch.set_facecolor("#121212")
@@ -153,7 +156,8 @@ fig, ax = plt.subplots(figsize=(6, 4))
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
 
-ani = animation.FuncAnimation(fig, update_graph, interval=2000)  
+# 🛠️ **Fix Warning**: Set cache_frame_data=False
+ani = animation.FuncAnimation(fig, update_graph, interval=2000, cache_frame_data=False)  
 
 # 🌍 Attack Tracking
 attack_counts = {}
