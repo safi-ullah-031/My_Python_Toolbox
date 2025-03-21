@@ -32,8 +32,40 @@ def get_vendor(mac):
     except:
         return "Unknown"
 
-# 🛑 Intruder Detection
+# 🚨 Block Unwanted Devices
+def block_device(mac):
+    try:
+        os.system(f"sudo iptables -A INPUT -m mac --mac-source {mac} -j DROP")
+        messagebox.showinfo("Blocked", f"Device {mac} has been blocked!")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to block device: {e}")
+
+# 🔎 Best WiFi Channel Finder
+def find_best_wifi_channel():
+    try:
+        result = os.popen("iwlist wlan0 scan | grep Frequency").read()
+        channels = {}
+        for line in result.split("\n"):
+            if "Frequency" in line:
+                freq = line.split(":")[1].split()[0]
+                channels[freq] = channels.get(freq, 0) + 1
+        best_channel = min(channels, key=channels.get) if channels else "Unknown"
+        messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel}")
+    except:
+        messagebox.showerror("Error", "Could not detect the best WiFi channel.")
+
+# 🌍 Approximate Geolocation
+def get_location():
+    try:
+        response = requests.get("https://ipinfo.io/json").json()
+        location_str = f"Location: {response['city']}, {response['region']}, {response['country']}\nIP: {response['ip']}"
+        messagebox.showinfo("Your Approximate Location", location_str)
+    except:
+        messagebox.showerror("Error", "Could not fetch location details.")
+
+# 📡 Network Scanner
 trusted_devices = set()
+device_count = []
 
 def scan_network():
     """Scans the network for connected devices."""
@@ -57,7 +89,12 @@ def scan_network():
             if mac not in trusted_devices and trusted_mode.get():
                 messagebox.showwarning("Intruder Alert!", f"Unknown Device Detected!\nIP: {ip}\nMAC: {mac}\nVendor: {vendor}")
 
+        device_count.append(len(devices))
+        if len(device_count) > 10:
+            device_count.pop(0)
+
         update_ui(devices)
+        update_device_graph()
     except Exception as e:
         messagebox.showerror("Error", f"Network scan failed: {e}")
 
@@ -79,8 +116,9 @@ def toggle_real_time():
         start_scan()
         root.after(5000, toggle_real_time)
 
-# 📊 Signal Strength Simulation & Graph
+# 📊 Signal Strength & Connected Devices Graph
 signal_strengths = []
+device_count = []
 
 def update_signal_graph():
     """Simulates and updates the WiFi signal strength graph."""
@@ -88,56 +126,45 @@ def update_signal_graph():
     if len(signal_strengths) > 10:
         signal_strengths.pop(0)
     
-    ax.clear()
-    ax.plot(range(len(signal_strengths)), signal_strengths, marker="o", linestyle="-", color="b")
-    ax.set_title("WiFi Signal Strength")
-    ax.set_ylim(0, 100)
+    ax1.clear()
+    ax1.plot(range(len(signal_strengths)), signal_strengths, marker="o", linestyle="-", color="b")
+    ax1.set_title("WiFi Signal Strength")
+    ax1.set_ylim(0, 100)
     canvas.draw()
     
     if real_time.get():
         root.after(2000, update_signal_graph)
 
+def update_device_graph():
+    """Updates the connected devices graph."""
+    ax2.clear()
+    ax2.plot(range(len(device_count)), device_count, marker="o", linestyle="-", color="r")
+    ax2.set_title("Connected Devices Over Time")
+    ax2.set_ylim(0, 20)
+    canvas.draw()
+
 # 📤 Export Data
-def export_data(file_type):
-    """Exports the scanned results as CSV or JSON."""
-    devices = [{"IP": table.item(row)["values"][0], "MAC": table.item(row)["values"][1], "Vendor": table.item(row)["values"][2], "Data Usage": table.item(row)["values"][3]} for row in table.get_children()]
-    
-    if file_type == "CSV":
-        file = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-        if file:
-            with open(file, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["IP", "MAC", "Vendor", "Data Usage"])
-                writer.writeheader()
-                writer.writerows(devices)
-            messagebox.showinfo("Export Success", "Data saved successfully as CSV.")
-    
-    elif file_type == "JSON":
-        file = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
-        if file:
-            with open(file, "w") as f:
-                json.dump(devices, f, indent=4)
-            messagebox.showinfo("Export Success", "Data saved successfully as JSON.")
+def export_data():
+    file = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+    if file:
+        with open(file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["IP", "MAC", "Vendor", "Data Usage"])
+            for row in table.get_children():
+                writer.writerow(table.item(row)["values"])
+        messagebox.showinfo("Export Success", "Data saved successfully.")
 
 # 📊 Save Graph as Image
 def save_graph():
     file = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
     if file:
         fig.savefig(file)
-        messagebox.showinfo("Export Success", "Graph saved successfully as PNG.")
-
-# 🌍 Approximate Geolocation
-def get_location():
-    try:
-        response = requests.get("https://ipinfo.io/json").json()
-        location_str = f"Location: {response['city']}, {response['region']}, {response['country']}\nIP: {response['ip']}"
-        messagebox.showinfo("Your Approximate Location", location_str)
-    except:
-        messagebox.showerror("Error", "Could not fetch location details.")
+        messagebox.showinfo("Export Success", "Graph saved successfully.")
 
 # 🎯 UI Design
 root = ctk.CTk()
 root.title("WiFi Network Analyzer")
-root.geometry("700x550")
+root.geometry("750x600")
 
 frame = ctk.CTkFrame(root)
 frame.pack(pady=10, fill="both", expand=True)
@@ -149,37 +176,20 @@ table.heading("Vendor", text="Device Vendor")
 table.heading("Data Usage", text="Data Usage (MB)")
 table.pack(fill="both", expand=True)
 
-# 📶 Signal Strength Graph
-fig, ax = plt.subplots(figsize=(5, 2))
+# 📶 Graph
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4))
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
 
-# 🔘 Buttons and Options
 scan_button = ctk.CTkButton(root, text="Scan Network", command=start_scan)
 scan_button.pack(pady=5)
 
 real_time = ctk.BooleanVar()
-real_time_toggle = ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time)
-real_time_toggle.pack()
+ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time).pack()
 
-trusted_mode = ctk.BooleanVar()
-trusted_toggle = ctk.CTkCheckBox(root, text="Enable Intruder Detection", variable=trusted_mode)
-trusted_toggle.pack()
-
-export_frame = ctk.CTkFrame(root)
-export_frame.pack(pady=5)
-
-csv_button = ctk.CTkButton(export_frame, text="Export CSV", command=lambda: export_data("CSV"))
-csv_button.pack(side="left", padx=10)
-
-json_button = ctk.CTkButton(export_frame, text="Export JSON", command=lambda: export_data("JSON"))
-json_button.pack(side="right", padx=10)
-
-graph_button = ctk.CTkButton(root, text="Save Graph", command=save_graph)
-graph_button.pack(pady=5)
-
-location_button = ctk.CTkButton(root, text="Get Approximate Location", command=get_location)
-location_button.pack(pady=5)
+ctk.CTkButton(root, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack()
+ctk.CTkButton(root, text="Export Data", command=export_data).pack()
+ctk.CTkButton(root, text="Save Graph", command=save_graph).pack()
 
 update_signal_graph()
 root.mainloop()
