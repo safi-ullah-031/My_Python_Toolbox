@@ -1,195 +1,131 @@
 import os
-import scapy.all as scapy
 import socket
+import scapy.all as scapy
 import customtkinter as ctk
-from tkinter import ttk, messagebox, filedialog
 import threading
-import json
-import csv
-import time
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import random
 import requests
+import csv
+import speedtest
+from tkinter import ttk, messagebox, filedialog
 
-# 🖥️ UI Setup
+# 🎨 UI Theme Setup
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# 🛠️ Get Local IP
-def get_local_ip():
+# 🔍 Get Local Network IP
+def get_network_ip():
     try:
-        return socket.gethostbyname(socket.gethostname())[:-1] + "1/24"
+        ip = socket.gethostbyname(socket.gethostname())
+        return ip[:-1] + "1/24"  # Example: Converts 192.168.1.5 -> 192.168.1.1/24
     except:
         return "192.168.1.1/24"
 
-# 🌍 MAC Vendor Lookup
-def get_vendor(mac):
+# 🏷️ Get Device Vendor from MAC Address
+def get_vendor(mac_address):
     try:
-        url = f"https://api.macvendors.com/{mac}"
-        response = requests.get(url)
+        response = requests.get(f"https://api.macvendors.com/{mac_address}")
         return response.text if response.status_code == 200 else "Unknown"
     except:
         return "Unknown"
 
-# 🚨 Block Unwanted Devices
-def block_device(mac):
-    try:
-        os.system(f"sudo iptables -A INPUT -m mac --mac-source {mac} -j DROP")
-        messagebox.showinfo("Blocked", f"Device {mac} has been blocked!")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to block device: {e}")
-
-# 🔎 Best WiFi Channel Finder
-def find_best_wifi_channel():
-    try:
-        result = os.popen("iwlist wlan0 scan | grep Frequency").read()
-        channels = {}
-        for line in result.split("\n"):
-            if "Frequency" in line:
-                freq = line.split(":")[1].split()[0]
-                channels[freq] = channels.get(freq, 0) + 1
-        best_channel = min(channels, key=channels.get) if channels else "Unknown"
-        messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel}")
-    except:
-        messagebox.showerror("Error", "Could not detect the best WiFi channel.")
-
-# 🌍 Approximate Geolocation
-def get_location():
-    try:
-        response = requests.get("https://ipinfo.io/json").json()
-        location_str = f"Location: {response['city']}, {response['region']}, {response['country']}\nIP: {response['ip']}"
-        messagebox.showinfo("Your Approximate Location", location_str)
-    except:
-        messagebox.showerror("Error", "Could not fetch location details.")
-
-# 📡 Network Scanner
-trusted_devices = set()
-device_count = []
-
+# 📡 Scan Network for Connected Devices
 def scan_network():
-    """Scans the network for connected devices."""
-    network_ip = get_local_ip()
+    network_ip = get_network_ip()
     try:
-        arp_request = scapy.ARP(pdst=network_ip)
+        request = scapy.ARP(pdst=network_ip)
         broadcast = scapy.Ether(dst="ff:ff:ff:ff:ff:ff")
-        packet = broadcast / arp_request
-        answered = scapy.srp(packet, timeout=2, verbose=False)[0]
-        
+        packet = broadcast / request
+        responses = scapy.srp(packet, timeout=2, verbose=False)[0]
+
         devices = []
-        for response in answered:
+        for response in responses:
             ip = response[1].psrc
             mac = response[1].hwsrc
             vendor = get_vendor(mac)
-            data_usage = random.randint(10, 500)  # Simulating bandwidth usage
+            devices.append((ip, mac, vendor))
 
-            devices.append({"IP": ip, "MAC": mac, "Vendor": vendor, "Data Usage": f"{data_usage} MB"})
-
-            # 🚨 Intruder Alert
-            if mac not in trusted_devices and trusted_mode.get():
-                messagebox.showwarning("Intruder Alert!", f"Unknown Device Detected!\nIP: {ip}\nMAC: {mac}\nVendor: {vendor}")
-
-        device_count.append(len(devices))
-        if len(device_count) > 10:
-            device_count.pop(0)
-
-        update_ui(devices)
-        update_device_graph()
+        update_device_list(devices)
     except Exception as e:
         messagebox.showerror("Error", f"Network scan failed: {e}")
 
-def update_ui(devices):
-    """Updates the table UI with new device data."""
-    for row in table.get_children():
-        table.delete(row)
-
+# 📌 Update Table with Scanned Devices
+def update_device_list(devices):
+    table.delete(*table.get_children())  # Clear previous results
     for device in devices:
-        table.insert("", "end", values=(device["IP"], device["MAC"], device["Vendor"], device["Data Usage"]))
+        table.insert("", "end", values=device)
 
+# 🔄 Start Scan in Background
 def start_scan():
-    """Starts the scanning process in a separate thread."""
     threading.Thread(target=scan_network, daemon=True).start()
 
-def toggle_real_time():
-    """Continuously scans the network if real-time mode is enabled."""
-    if real_time.get():
-        start_scan()
-        root.after(5000, toggle_real_time)
-
-# 📊 Signal Strength & Connected Devices Graph
-signal_strengths = []
-device_count = []
-
-def update_signal_graph():
-    """Simulates and updates the WiFi signal strength graph."""
-    signal_strengths.append(random.randint(30, 100))
-    if len(signal_strengths) > 10:
-        signal_strengths.pop(0)
-    
-    ax1.clear()
-    ax1.plot(range(len(signal_strengths)), signal_strengths, marker="o", linestyle="-", color="b")
-    ax1.set_title("WiFi Signal Strength")
-    ax1.set_ylim(0, 100)
-    canvas.draw()
-    
-    if real_time.get():
-        root.after(2000, update_signal_graph)
-
-def update_device_graph():
-    """Updates the connected devices graph."""
-    ax2.clear()
-    ax2.plot(range(len(device_count)), device_count, marker="o", linestyle="-", color="r")
-    ax2.set_title("Connected Devices Over Time")
-    ax2.set_ylim(0, 20)
-    canvas.draw()
-
-# 📤 Export Data
+# 📤 Export Data to CSV
 def export_data():
-    file = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-    if file:
-        with open(file, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["IP", "MAC", "Vendor", "Data Usage"])
+    file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+    if file_path:
+        with open(file_path, "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["IP Address", "MAC Address", "Vendor"])
             for row in table.get_children():
                 writer.writerow(table.item(row)["values"])
-        messagebox.showinfo("Export Success", "Data saved successfully.")
+        messagebox.showinfo("Export Successful", "Data saved successfully!")
 
-# 📊 Save Graph as Image
-def save_graph():
-    file = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
-    if file:
-        fig.savefig(file)
-        messagebox.showinfo("Export Success", "Graph saved successfully.")
+# 📶 Find Best WiFi Channel (Linux Only)
+def find_best_wifi_channel():
+    try:
+        result = os.popen("nmcli dev wifi").read()
+        channels = {}
 
-# 🎯 UI Design
+        for line in result.split("\n"):
+            parts = line.split()
+            if len(parts) > 4 and parts[4].isdigit():
+                channel = int(parts[4])
+                channels[channel] = channels.get(channel, 0) + 1
+
+        best_channel = min(channels, key=channels.get) if channels else "Unknown"
+        messagebox.showinfo("Best WiFi Channel", f"Recommended WiFi Channel: {best_channel}")
+    except:
+        messagebox.showerror("Error", "Could not determine the best WiFi channel.")
+
+# 🚀 Test Internet Speed
+def test_speed():
+    messagebox.showinfo("Speed Test", "Testing network speed... Please wait.")
+    try:
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        download = round(st.download() / 1_000_000, 2)  # Convert to Mbps
+        upload = round(st.upload() / 1_000_000, 2)
+        messagebox.showinfo("Speed Test Results", f"Download: {download} Mbps\nUpload: {upload} Mbps")
+    except:
+        messagebox.showerror("Error", "Network speed test failed.")
+
+# 🎨 Create UI
 root = ctk.CTk()
 root.title("WiFi Network Analyzer")
-root.geometry("750x600")
+root.geometry("700x450")
+root.minsize(700, 400)
 
-frame = ctk.CTkFrame(root)
-frame.pack(pady=10, fill="both", expand=True)
+# 📋 Table for Displaying Devices
+table_frame = ctk.CTkFrame(root)
+table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-table = ttk.Treeview(frame, columns=("IP", "MAC", "Vendor", "Data Usage"), show="headings")
+table = ttk.Treeview(table_frame, columns=("IP", "MAC", "Vendor"), show="headings")
 table.heading("IP", text="IP Address")
 table.heading("MAC", text="MAC Address")
-table.heading("Vendor", text="Device Vendor")
-table.heading("Data Usage", text="Data Usage (MB)")
+table.heading("Vendor", text="Vendor")
+
+scroll_y = ttk.Scrollbar(table_frame, orient="vertical", command=table.yview)
+table.configure(yscroll=scroll_y.set)
+scroll_y.pack(side="right", fill="y")
 table.pack(fill="both", expand=True)
 
-# 📶 Graph
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4))
-canvas = FigureCanvasTkAgg(fig, master=root)
-canvas.get_tk_widget().pack()
+# 🎛️ Buttons Section
+button_frame = ctk.CTkFrame(root)
+button_frame.pack(fill="x", padx=10, pady=5)
 
-scan_button = ctk.CTkButton(root, text="Scan Network", command=start_scan)
-scan_button.pack(pady=5)
+ctk.CTkButton(button_frame, text="Scan Network", command=start_scan).pack(side="left", expand=True, padx=5, pady=5)
+ctk.CTkButton(button_frame, text="Export Data", command=export_data).pack(side="left", expand=True, padx=5, pady=5)
+ctk.CTkButton(button_frame, text="WiFi Channel", command=find_best_wifi_channel).pack(side="left", expand=True, padx=5, pady=5)
+ctk.CTkButton(button_frame, text="Speed Test", command=test_speed).pack(side="left", expand=True, padx=5, pady=5)
 
-real_time = ctk.BooleanVar()
-ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time).pack()
-
-ctk.CTkButton(root, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack()
-ctk.CTkButton(root, text="Export Data", command=export_data).pack()
-ctk.CTkButton(root, text="Save Graph", command=save_graph).pack()
-
-update_signal_graph()
+# 🏁 Run Application
 root.mainloop()
