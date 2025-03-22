@@ -7,8 +7,7 @@ import threading
 import random
 import requests
 import csv
-import subprocess
-import platform
+import speedtest
 
 # 🖥️ UI Setup
 ctk.set_appearance_mode("System")
@@ -30,53 +29,27 @@ def get_vendor(mac):
     except:
         return "Unknown"
 
-# 🏆 Best WiFi Channel Finder (Windows & Linux)
+# Best WiFi Channel Finder (Updated)
 def find_best_wifi_channel():
-    system_os = platform.system()
-    
-    if system_os == "Linux":
-        try:
-            output = subprocess.check_output(["iwlist", "wlan0", "scan"]).decode()
-            frequencies = re.findall(r"Frequency:(\d+\.\d+) GHz", output)
-
-            channel_counts = {}
-            for freq in frequencies:
-                channel_counts[freq] = channel_counts.get(freq, 0) + 1
-
-            if channel_counts:
-                best_channel = min(channel_counts, key=channel_counts.get)
-                messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel} GHz")
-            else:
-                messagebox.showerror("Error", "No WiFi networks detected.")
+    try:
+        result = os.popen("nmcli dev wifi").read()
+        channels = {}
+        for line in result.split("\n"):
+            parts = line.split()
+            if len(parts) > 4 and parts[4].isdigit():
+                channel = int(parts[4])
+                channels[channel] = channels.get(channel, 0) + 1
         
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to scan: {e}")
-
-    elif system_os == "Windows":
-        try:
-            output = subprocess.check_output(["netsh", "wlan", "show", "networks", "mode=bssid"]).decode()
-            channels = re.findall(r"Channel\s*:\s*(\d+)", output)
-
-            channel_counts = {}
-            for channel in channels:
-                channel_counts[channel] = channel_counts.get(channel, 0) + 1
-
-            if channel_counts:
-                best_channel = min(channel_counts, key=channel_counts.get)
-                messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel}")
-            else:
-                messagebox.showerror("Error", "No WiFi networks detected.")
-        
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to scan: {e}")
-
-    else:
-        messagebox.showerror("Unsupported OS", "Only Windows & Linux are supported.")
+        best_channel = min(channels, key=channels.get) if channels else "Unknown"
+        messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel}")
+    except:
+        messagebox.showerror("Error", "Could not detect the best WiFi channel.")
 
 # 📡 Network Scanner
 trusted_devices = set()
 
 def scan_network():
+    """Scans the network for connected devices."""
     network_ip = get_local_ip()
     try:
         arp_request = scapy.ARP(pdst=network_ip)
@@ -102,6 +75,7 @@ def scan_network():
         messagebox.showerror("Error", f"Network scan failed: {e}")
 
 def update_ui(devices):
+    """Updates the table UI with new device data."""
     for row in table.get_children():
         table.delete(row)
 
@@ -109,49 +83,14 @@ def update_ui(devices):
         table.insert("", "end", values=(device["IP"], device["MAC"], device["Vendor"], device["Data Usage"]))
 
 def start_scan():
+    """Starts the scanning process in a separate thread."""
     threading.Thread(target=scan_network, daemon=True).start()
 
 def toggle_real_time():
+    """Continuously scans the network if real-time mode is enabled."""
     if real_time.get():
         start_scan()
         root.after(5000, toggle_real_time)
-
-# ❌ Device Blocker (Blocks a MAC Address)
-def block_device():
-    selected = table.selection()
-    if not selected:
-        messagebox.showerror("Error", "No device selected to block.")
-        return
-
-    mac_address = table.item(selected[0])["values"][1]
-    system_os = platform.system()
-
-    try:
-        if system_os == "Linux":
-            os.system(f"sudo iptables -A INPUT -m mac --mac-source {mac_address} -j DROP")
-            os.system(f"sudo iptables -A FORWARD -m mac --mac-source {mac_address} -j DROP")
-        elif system_os == "Windows":
-            os.system(f"netsh wlan delete filter permission=allow ssid= any networktype=infrastructure mac={mac_address}")
-        else:
-            messagebox.showerror("Unsupported OS", "MAC blocking not supported on this OS.")
-            return
-
-        messagebox.showinfo("Blocked", f"Device {mac_address} has been blocked.")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to block device: {e}")
-
-# 🌍 Internet Speed Test (Ping)
-def ping_test():
-    system_os = platform.system()
-    try:
-        if system_os == "Windows":
-            output = subprocess.check_output(["ping", "-n", "4", "8.8.8.8"]).decode()
-        else:
-            output = subprocess.check_output(["ping", "-c", "4", "8.8.8.8"]).decode()
-        
-        messagebox.showinfo("Ping Test Result", output)
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to perform ping test: {e}")
 
 # 📤 Export Data
 def export_data():
@@ -164,22 +103,36 @@ def export_data():
                 writer.writerow(table.item(row)["values"])
         messagebox.showinfo("Export Success", "Data saved successfully.")
 
+# 🚀 Network Speed Test
+def test_speed():
+    messagebox.showinfo("Speed Test", "Testing network speed... Please wait.")
+    try:
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        download_speed = round(st.download() / 1_000_000, 2)
+        upload_speed = round(st.upload() / 1_000_000, 2)
+        messagebox.showinfo("Speed Test Results", f"Download Speed: {download_speed} Mbps\nUpload Speed: {upload_speed} Mbps")
+    except:
+        messagebox.showerror("Error", "Network speed test failed.")
+
 # 🎯 UI Design
 root = ctk.CTk()
 root.title("WiFi Network Analyzer")
 root.geometry("900x500")
-root.minsize(750, 400)
+root.minsize(750, 400)  # Minimum size to prevent UI breaking
 
 # Frame for table
 table_frame = ctk.CTkFrame(root)
 table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+# Table (Treeview)
 table = ttk.Treeview(table_frame, columns=("IP", "MAC", "Vendor", "Data Usage"), show="headings")
 table.heading("IP", text="IP Address")
 table.heading("MAC", text="MAC Address")
 table.heading("Vendor", text="Device Vendor")
 table.heading("Data Usage", text="Data Usage (MB)")
 
+# Scrollbars
 scroll_y = ttk.Scrollbar(table_frame, orient="vertical", command=table.yview)
 scroll_x = ttk.Scrollbar(table_frame, orient="horizontal", command=table.xview)
 table.configure(yscroll=scroll_y.set, xscroll=scroll_x.set)
@@ -188,15 +141,35 @@ scroll_y.pack(side="right", fill="y")
 scroll_x.pack(side="bottom", fill="x")
 table.pack(fill="both", expand=True)
 
-# Buttons
+# Button Frame
 button_frame = ctk.CTkFrame(root)
 button_frame.pack(fill="x", padx=10, pady=5)
 
-ctk.CTkButton(button_frame, text="Scan Network", command=start_scan).pack(side="left", padx=5)
-ctk.CTkButton(button_frame, text="Export Data", command=export_data).pack(side="left", padx=5)
-ctk.CTkButton(button_frame, text="Block Device", command=block_device).pack(side="left", padx=5)
-ctk.CTkButton(button_frame, text="Ping Test", command=ping_test).pack(side="left", padx=5)
-ctk.CTkButton(button_frame, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack(side="left", padx=5)
+scan_button = ctk.CTkButton(button_frame, text="Scan Network", command=start_scan)
+scan_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+
+export_button = ctk.CTkButton(button_frame, text="Export Data", command=export_data)
+export_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+wifi_channel_button = ctk.CTkButton(button_frame, text="Find Best WiFi Channel", command=find_best_wifi_channel)
+wifi_channel_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
+speed_test_button = ctk.CTkButton(button_frame, text="Network Speed Test", command=test_speed)
+speed_test_button.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
+
+# Checkboxes
+real_time = ctk.BooleanVar()
+trusted_mode = ctk.BooleanVar()
+
+real_time_checkbox = ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time)
+real_time_checkbox.pack(pady=5)
+
+trusted_mode_checkbox = ctk.CTkCheckBox(root, text="Enable Intruder Alert", variable=trusted_mode)
+trusted_mode_checkbox.pack(pady=5)
+
+# Auto adjust button frame layout
+for i in range(4):
+    button_frame.grid_columnconfigure(i, weight=1)
 
 # Run UI
 root.mainloop()
