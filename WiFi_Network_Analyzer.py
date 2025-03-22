@@ -12,14 +12,14 @@ import csv
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# 🛠️ Get Local IP
+# Get Local IP
 def get_local_ip():
     try:
         return socket.gethostbyname(socket.gethostname())[:-1] + "1/24"
     except:
         return "192.168.1.1/24"
 
-# 🌍 MAC Vendor Lookup
+# MAC Vendor Lookup
 def get_vendor(mac):
     try:
         url = f"https://api.macvendors.com/{mac}"
@@ -28,15 +28,7 @@ def get_vendor(mac):
     except:
         return "Unknown"
 
-# 🚨 Block Unwanted Devices
-def block_device(mac):
-    try:
-        os.system(f"sudo iptables -A INPUT -m mac --mac-source {mac} -j DROP")
-        messagebox.showinfo("Blocked", f"Device {mac} has been blocked!")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to block device: {e}")
-
-# 🔎 Best WiFi Channel Finder
+# Best WiFi Channel Finder
 def find_best_wifi_channel():
     try:
         result = os.popen("iwlist wlan0 scan | grep Frequency").read()
@@ -49,15 +41,6 @@ def find_best_wifi_channel():
         messagebox.showinfo("Best WiFi Channel", f"The best WiFi channel is: {best_channel}")
     except:
         messagebox.showerror("Error", "Could not detect the best WiFi channel.")
-
-# 🌍 Approximate Geolocation
-def get_location():
-    try:
-        response = requests.get("https://ipinfo.io/json").json()
-        location_str = f"Location: {response['city']}, {response['region']}, {response['country']}\nIP: {response['ip']}"
-        messagebox.showinfo("Your Approximate Location", location_str)
-    except:
-        messagebox.showerror("Error", "Could not fetch location details.")
 
 # 📡 Network Scanner
 trusted_devices = set()
@@ -120,27 +103,52 @@ def export_data():
 # 🎯 UI Design
 root = ctk.CTk()
 root.title("WiFi Network Analyzer")
-root.geometry("750x500")
+root.geometry("900x500")
+root.minsize(750, 400)  # Minimum size to prevent UI breaking
 
-frame = ctk.CTkFrame(root)
-frame.pack(pady=10, fill="both", expand=True)
+# Frame for table
+table_frame = ctk.CTkFrame(root)
+table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-table = ttk.Treeview(frame, columns=("IP", "MAC", "Vendor", "Data Usage"), show="headings")
+# Table (Treeview)
+table = ttk.Treeview(table_frame, columns=("IP", "MAC", "Vendor", "Data Usage"), show="headings")
 table.heading("IP", text="IP Address")
 table.heading("MAC", text="MAC Address")
 table.heading("Vendor", text="Device Vendor")
 table.heading("Data Usage", text="Data Usage (MB)")
+
+# Scrollbars
+scroll_y = ttk.Scrollbar(table_frame, orient="vertical", command=table.yview)
+scroll_x = ttk.Scrollbar(table_frame, orient="horizontal", command=table.xview)
+table.configure(yscroll=scroll_y.set, xscroll=scroll_x.set)
+
+scroll_y.pack(side="right", fill="y")
+scroll_x.pack(side="bottom", fill="x")
 table.pack(fill="both", expand=True)
 
-scan_button = ctk.CTkButton(root, text="Scan Network", command=start_scan)
-scan_button.pack(pady=5)
+# Button Frame
+button_frame = ctk.CTkFrame(root)
+button_frame.pack(fill="x", padx=10, pady=5)
 
+scan_button = ctk.CTkButton(button_frame, text="Scan Network", command=start_scan)
+scan_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+
+export_button = ctk.CTkButton(button_frame, text="Export Data", command=export_data)
+export_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+
+wifi_channel_button = ctk.CTkButton(button_frame, text="Find Best WiFi Channel", command=find_best_wifi_channel)
+wifi_channel_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+
+# Checkboxes
 real_time = ctk.BooleanVar()
 trusted_mode = ctk.BooleanVar()
 
-ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time).pack()
+real_time_checkbox = ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time)
+real_time_checkbox.pack(pady=5)
 
-ctk.CTkButton(root, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack()
-ctk.CTkButton(root, text="Export Data", command=export_data).pack()
+# Auto adjust button frame layout
+for i in range(3):
+    button_frame.grid_columnconfigure(i, weight=1)
 
+# Run UI
 root.mainloop()
