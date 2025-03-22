@@ -4,13 +4,9 @@ import socket
 import customtkinter as ctk
 from tkinter import ttk, messagebox, filedialog
 import threading
-import json
-import csv
-import time
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import random
 import requests
+import csv
 
 # 🖥️ UI Setup
 ctk.set_appearance_mode("System")
@@ -65,12 +61,9 @@ def get_location():
 
 # 📡 Network Scanner
 trusted_devices = set()
-device_count = []
-signal_strengths = []
 
 def scan_network():
     """Scans the network for connected devices."""
-    global device_count
     network_ip = get_local_ip()
     try:
         arp_request = scapy.ARP(pdst=network_ip)
@@ -83,7 +76,7 @@ def scan_network():
             ip = response[1].psrc
             mac = response[1].hwsrc
             vendor = get_vendor(mac)
-            data_usage = random.randint(10, 500)  # Simulating bandwidth usage
+            data_usage = random.randint(10, 500)  # Simulated bandwidth usage
 
             devices.append({"IP": ip, "MAC": mac, "Vendor": vendor, "Data Usage": f"{data_usage} MB"})
 
@@ -91,12 +84,7 @@ def scan_network():
             if mac not in trusted_devices and trusted_mode.get():
                 messagebox.showwarning("Intruder Alert!", f"Unknown Device Detected!\nIP: {ip}\nMAC: {mac}\nVendor: {vendor}")
 
-        device_count.append(len(devices))
-        if len(device_count) > 10:
-            device_count.pop(0)
-
         update_ui(devices)
-        update_device_graph()
     except Exception as e:
         messagebox.showerror("Error", f"Network scan failed: {e}")
 
@@ -118,34 +106,6 @@ def toggle_real_time():
         start_scan()
         root.after(5000, toggle_real_time)
 
-# 📊 Graph Updates
-def update_signal_graph():
-    """Simulates and updates the WiFi signal strength graph."""
-    global signal_strengths
-    signal_strengths.append(random.randint(30, 100))
-    if len(signal_strengths) > 10:
-        signal_strengths.pop(0)
-    
-    ax1.clear()
-    ax1.plot(range(len(signal_strengths)), signal_strengths, marker="o", linestyle="-", color="b")
-    ax1.set_title("WiFi Signal Strength")
-    ax1.set_ylim(0, 100)
-    
-    canvas.draw()
-
-    if real_time.get():
-        root.after(2000, update_signal_graph)
-
-def update_device_graph():
-    """Updates the connected devices graph."""
-    global device_count
-    ax2.clear()
-    ax2.plot(range(len(device_count)), device_count, marker="o", linestyle="-", color="r")
-    ax2.set_title("Connected Devices Over Time")
-    ax2.set_ylim(0, 20)
-    
-    canvas.draw()
-
 # 📤 Export Data
 def export_data():
     file = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
@@ -157,17 +117,10 @@ def export_data():
                 writer.writerow(table.item(row)["values"])
         messagebox.showinfo("Export Success", "Data saved successfully.")
 
-# 📊 Save Graph as Image
-def save_graph():
-    file = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
-    if file:
-        fig.savefig(file)
-        messagebox.showinfo("Export Success", "Graph saved successfully.")
-
 # 🎯 UI Design
 root = ctk.CTk()
 root.title("WiFi Network Analyzer")
-root.geometry("750x600")
+root.geometry("750x500")
 
 frame = ctk.CTkFrame(root)
 frame.pack(pady=10, fill="both", expand=True)
@@ -179,11 +132,6 @@ table.heading("Vendor", text="Device Vendor")
 table.heading("Data Usage", text="Data Usage (MB)")
 table.pack(fill="both", expand=True)
 
-# 📶 Graph
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4))
-canvas = FigureCanvasTkAgg(fig, master=root)
-canvas.get_tk_widget().pack()
-
 scan_button = ctk.CTkButton(root, text="Scan Network", command=start_scan)
 scan_button.pack(pady=5)
 
@@ -194,7 +142,5 @@ ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, co
 
 ctk.CTkButton(root, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack()
 ctk.CTkButton(root, text="Export Data", command=export_data).pack()
-ctk.CTkButton(root, text="Save Graph", command=save_graph).pack()
 
-update_signal_graph()
 root.mainloop()
