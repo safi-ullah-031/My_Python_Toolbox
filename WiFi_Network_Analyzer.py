@@ -66,9 +66,11 @@ def get_location():
 # 📡 Network Scanner
 trusted_devices = set()
 device_count = []
+signal_strengths = []
 
 def scan_network():
     """Scans the network for connected devices."""
+    global device_count
     network_ip = get_local_ip()
     try:
         arp_request = scapy.ARP(pdst=network_ip)
@@ -116,12 +118,10 @@ def toggle_real_time():
         start_scan()
         root.after(5000, toggle_real_time)
 
-# 📊 Signal Strength & Connected Devices Graph
-signal_strengths = []
-device_count = []
-
+# 📊 Graph Updates
 def update_signal_graph():
     """Simulates and updates the WiFi signal strength graph."""
+    global signal_strengths
     signal_strengths.append(random.randint(30, 100))
     if len(signal_strengths) > 10:
         signal_strengths.pop(0)
@@ -130,17 +130,20 @@ def update_signal_graph():
     ax1.plot(range(len(signal_strengths)), signal_strengths, marker="o", linestyle="-", color="b")
     ax1.set_title("WiFi Signal Strength")
     ax1.set_ylim(0, 100)
-    canvas.draw()
     
+    canvas.draw()
+
     if real_time.get():
         root.after(2000, update_signal_graph)
 
 def update_device_graph():
     """Updates the connected devices graph."""
+    global device_count
     ax2.clear()
     ax2.plot(range(len(device_count)), device_count, marker="o", linestyle="-", color="r")
     ax2.set_title("Connected Devices Over Time")
     ax2.set_ylim(0, 20)
+    
     canvas.draw()
 
 # 📤 Export Data
@@ -185,6 +188,8 @@ scan_button = ctk.CTkButton(root, text="Scan Network", command=start_scan)
 scan_button.pack(pady=5)
 
 real_time = ctk.BooleanVar()
+trusted_mode = ctk.BooleanVar()
+
 ctk.CTkCheckBox(root, text="Enable Real-Time Monitoring", variable=real_time, command=toggle_real_time).pack()
 
 ctk.CTkButton(root, text="Find Best WiFi Channel", command=find_best_wifi_channel).pack()
