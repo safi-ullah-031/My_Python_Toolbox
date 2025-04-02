@@ -2,11 +2,17 @@ import re
 import dns.resolver
 import requests
 import whois
+import json
+import email
+from email import policy
+from email.parser import BytesParser
+
+# 🌍 IP Geolocation API (Use any free IP lookup service)
+IP_GEOLOCATION_API = "http://ip-api.com/json/{}"
 
 # 🚀 Phishing & Spam Indicators
 PHISHING_KEYWORDS = ["urgent", "verify your account", "click here", "update payment", "login now"]
-BLACKLIST_CHECK_API = "https://openphish.com/feed.txt"  # Example phishing database
-BREACH_CHECK_API = "https://haveibeenpwned.com/api/v3/breachedaccount/{}"  # Needs API key
+BLACKLIST_CHECK_API = "https://openphish.com/feed.txt"
 
 # ✅ Email format validation
 def is_valid_email(email):
@@ -43,19 +49,48 @@ def get_whois_info(domain):
     except:
         return None, None
 
-# 🔎 Check if email is in leaked databases (Optional: Requires API Key)
-def check_breached_data(email):
-    headers = {"hibp-api-key": "YOUR_API_KEY"}  # Replace with valid API key
+# 🌍 IP Geolocation Lookup
+def get_ip_geolocation(ip):
     try:
-        response = requests.get(BREACH_CHECK_API.format(email), headers=headers)
-        if response.status_code == 200:
-            return "⚠️ Email found in data breaches!"
+        response = requests.get(IP_GEOLOCATION_API.format(ip))
+        data = response.json()
+        if response.status_code == 200 and data.get("status") == "success":
+            return f"🌍 IP Location: {data['city']}, {data['country']} (ISP: {data['isp']})"
     except:
         pass
-    return "✅ No breaches found."
+    return "⚠️ IP Geolocation Not Available"
 
-# 🎯 Analyze Email
-def analyze_email(email):
+# 🔎 Extract Sender’s IP from Email Header
+def extract_sender_ip(email_header):
+    received_lines = [line for line in email_header.split("\n") if line.lower().startswith("received:")]
+    for line in received_lines:
+        match = re.search(r"\[([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\]", line)
+        if match:
+            return match.group(1)
+    return None
+
+# 🛡️ Check DNS SPF Record
+def check_spf(domain):
+    try:
+        txt_records = dns.resolver.resolve(domain, 'TXT')
+        for record in txt_records:
+            if "v=spf1" in record.to_text():
+                return "✅ SPF Record Found"
+    except:
+        pass
+    return "❌ No SPF Record Found"
+
+# 🛡️ Check DNS DKIM Record
+def check_dkim(domain):
+    try:
+        dkim_record = f"default._domainkey.{domain}"
+        dns.resolver.resolve(dkim_record, 'TXT')
+        return "✅ DKIM Record Found"
+    except:
+        return "❌ No DKIM Record Found"
+
+# 🔎 Analyze Email
+def analyze_email(email, email_header=None):
     if not is_valid_email(email):
         return "❌ Invalid Email Format!"
 
@@ -66,7 +101,7 @@ def analyze_email(email):
     domain_age, registrar = get_whois_info(domain)
 
     results = []
-    
+
     # ✅ Format validation
     if mx_valid:
         results.append("✅ Valid Email Server (MX records found)")
@@ -87,15 +122,37 @@ def analyze_email(email):
     if registrar:
         results.append(f"🏛 Registrar: {registrar}")
 
-    # 🛑 Data breach check
-    breach_status = check_breached_data(email)
-    results.append(breach_status)
+    # 🛡️ DNS Security Checks
+    results.append(check_spf(domain))
+    results.append(check_dkim(domain))
+
+    # 🌍 IP Geolocation
+    if email_header:
+        sender_ip = extract_sender_ip(email_header)
+        if sender_ip:
+            results.append(f"📡 Sender IP: {sender_ip}")
+            results.append(get_ip_geolocation(sender_ip))
+        else:
+            results.append("⚠️ Could not extract sender IP")
 
     return "\n".join(results)
+
+# 📩 Read Email Header from File (For testing)
+def read_email_header(file_path):
+    with open(file_path, "rb") as f:
+        msg = BytesParser(policy=policy.default).parse(f)
+        return str(msg)
 
 # 🚀 Run the tool
 if __name__ == "__main__":
     user_email = input("Enter an email to analyze: ")
-    result = analyze_email(user_email)
+    header_option = input("Do you have an email header file? (y/n): ")
+
+    email_header = None
+    if header_option.lower() == "y":
+        file_path = input("Enter email header file path: ")
+        email_header = read_email_header(file_path)
+
+    result = analyze_email(user_email, email_header)
     print("\n🔍 OSINT Email Analysis Report 🔍")
     print(result)
