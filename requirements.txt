@@ -11,3 +11,7 @@ pyautogui
 keyboard
 speedtest-cli
 customtkinter
+validators 
+dnspython 
+python-whois 
+requests
