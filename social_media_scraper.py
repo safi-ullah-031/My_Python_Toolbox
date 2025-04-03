@@ -1,104 +1,71 @@
-import requests
-import json
-import pandas as pd
-from bs4 import BeautifulSoup
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException
 
-# List of platforms to check username availability
+# Social media platforms and their profile URL patterns
 SOCIAL_MEDIA_URLS = {
-    "Twitter": "https://twitter.com/{}",
-    "Instagram": "https://www.instagram.com/{}",
     "Facebook": "https://www.facebook.com/{}",
+    "Instagram": "https://www.instagram.com/{}/",
+    "Twitter": "https://twitter.com/{}",
+    "LinkedIn": "https://www.linkedin.com/in/{}",
     "GitHub": "https://github.com/{}",
     "TikTok": "https://www.tiktok.com/@{}"
 }
 
-# Function to check username availability
+def setup_driver():
+    """Set up the headless Selenium WebDriver."""
+    options = Options()
+    options.add_argument("--headless")  # Run in headless mode (no GUI)
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("start-maximized")
+    options.add_argument("disable-infobars")
+    options.add_argument("--disable-blink-features=AutomationControlled")  # Avoid bot detection
+
+    # Use WebDriver Manager to get the latest ChromeDriver
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    return driver
+
 def check_username(username):
+    """Check if a username exists on different social media platforms."""
+    driver = setup_driver()
     results = {}
+
     for platform, url in SOCIAL_MEDIA_URLS.items():
         profile_url = url.format(username)
-        response = requests.get(profile_url)
+        print(f"Checking {platform}...")
 
-        if response.status_code == 200:
-            results[platform] = {"exists": True, "profile_url": profile_url}
-        else:
-            results[platform] = {"exists": False}
+        try:
+            driver.get(profile_url)
+            time.sleep(3)  # Wait for page to load
+            
+            # Check for 404 or non-existing profile elements
+            if "Page Not Found" in driver.title or "Sorry, this page isn't available" in driver.page_source:
+                results[platform] = {"exists": False}
+            else:
+                results[platform] = {"exists": True, "profile_url": profile_url}
 
-    return results
-
-# Function to scrape Twitter bio using BeautifulSoup
-def scrape_twitter_profile(username):
-    url = f"https://twitter.com/{username}"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        return {"error": "Profile not found"}
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    profile_info = {
-        "name": soup.find("title").text,
-        "bio": soup.find("meta", {"name": "description"})["content"]
-    }
-
-    return profile_info
-
-# Function to scrape Instagram bio using Selenium
-def scrape_instagram(username):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Runs in background
-    driver = webdriver.Chrome(service=Service("chromedriver.exe"), options=chrome_options)
-
-    url = f"https://www.instagram.com/{username}/"
-    driver.get(url)
-
-    profile_info = {"username": username}
-
-    try:
-        profile_info["bio"] = driver.find_element(By.XPATH, "//meta[@name='description']").get_attribute("content")
-    except:
-        profile_info["error"] = "Profile not found or blocked"
+        except (TimeoutException, WebDriverException, NoSuchElementException) as e:
+            results[platform] = {"error": f"Error checking {platform}: {e}"}
 
     driver.quit()
-    return profile_info
+    return results
 
-# Function to save data to CSV
-def save_to_csv(data, filename="profiles.csv"):
-    df = pd.DataFrame(data)
-    df.to_csv(filename, index=False)
-    print(f"✅ Data saved to {filename}")
-
-# Function to save data to JSON
-def save_to_json(data, filename="profiles.json"):
-    with open(filename, "w") as file:
-        json.dump(data, file, indent=4)
-    print(f"✅ Data saved to {filename}")
-
-# Main function to execute the tool
 if __name__ == "__main__":
     username = input("🔹 Enter the username to check: ")
-    
-    # Step 1: Check Username Availability
     results = check_username(username)
-    
-    # Step 2: Scrape Profile Information
-    twitter_data = scrape_twitter_profile(username)
-    instagram_data = scrape_instagram(username)
 
-    # Combine results
-    final_data = {
-        "username": username,
-        "availability": results,
-        "twitter_data": twitter_data,
-        "instagram_data": instagram_data
-    }
-
-    # Step 3: Save Data
-    save_to_csv([final_data])  # Save as CSV
-    save_to_json(final_data)   # Save as JSON
-
-    # Step 4: Display Results
-    print(json.dumps(final_data, indent=4))
+    print("\n🔹 Results:")
+    for platform, data in results.items():
+        if data.get("exists"):
+            print(f"✅ {platform}: Found at {data['profile_url']}")
+        elif data.get("error"):
+            print(f"⚠️ {platform}: {data['error']}")
+        else:
+            print(f"❌ {platform}: Not found")
