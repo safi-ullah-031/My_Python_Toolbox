@@ -1,5 +1,5 @@
 # My Python Toolbox
-A collection of Python scripts for automation, file-related tasks, and more. This repository serves as a handy toolbox for various everyday programming needs.
+A collection of Python scripts for automation, file-related tasks, cyber-security and more. This repository serves as a handy toolbox for various everyday programming needs.
 
 # Features
 Automation scripts for repetitive tasks
